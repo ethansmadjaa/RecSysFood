@@ -10,6 +10,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarHeader,
+  useSidebar,
 } from "@/components/ui/sidebar"
 import { useAuth } from "@/hooks/useAuth"
 import { signOut } from "@/lib/supabase/auth"
@@ -48,18 +49,20 @@ export function AppSidebar() {
   const { profile, user } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
-
+  const { state } = useSidebar()
   const handleSignOut = async () => {
     await signOut()
     navigate("/auth/login")
   }
 
   return (
-    <Sidebar variant="inset">
+    <Sidebar variant="inset" collapsible="icon" >
       <SidebarHeader>
         <div className="flex items-center gap-2 px-2 py-4">
           <UtensilsCrossed className="h-6 w-6 text-sidebar-primary" />
-          <span className="font-bold text-lg">RecSysFood</span>
+          {state === "expanded" && (
+            <span className="font-bold text-lg">RecSysFood</span>
+          )}
         </div>
       </SidebarHeader>
       <SidebarContent>

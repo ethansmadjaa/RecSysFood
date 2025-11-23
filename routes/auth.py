@@ -3,7 +3,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, EmailStr
 from typing import Optional
 
-router = APIRouter(prefix="/auth", tags=["auth"])
+router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 class SignInRequest(BaseModel):
     email: EmailStr
@@ -105,7 +105,10 @@ async def get_user_profile(auth_id: str):
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error fetching profile: {str(e)}")
+        if "Cannot coerce" in str(e):
+            raise HTTPException(status_code=404, detail="User profile not found")
+        else:
+            raise HTTPException(status_code=500, detail=f"Error fetching profile: {str(e)}")
 
 @router.patch("/profile/{auth_id}/complete-signup")
 async def complete_signup(auth_id: str):

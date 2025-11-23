@@ -6,7 +6,7 @@ import { ProtectedRoute } from '@/components/ProtectedRoute'
 import { Login } from '@/pages/auth/Login'
 import { Signup } from '@/pages/auth/Signup'
 import { VerifyEmail } from '@/pages/auth/VerifyEmail'
-import { SignupFlow } from '@/pages/SignupFlow'
+import { NewSignupFlow } from '@/pages/NewSignupFlow'
 import { Dashboard } from '@/pages/Dashboard'
 import { Recommendations } from '@/pages/recommendations'
 import { Favorites } from '@/pages/favorites'
@@ -29,7 +29,7 @@ function App() {
             path="/signup-flow"
             element={
               <ProtectedRoute>
-                <SignupFlow />
+                <NewSignupFlow />
               </ProtectedRoute>
             }
           />

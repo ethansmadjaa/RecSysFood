@@ -35,7 +35,7 @@ interface ApiAuthResponse {
  */
 export async function signUp({ email, password, firstName, lastName }: SignUpData) {
   try {
-    const response = await fetch(`${env.API_URL}/auth/signup`, {
+    const response = await fetch(`${env.API_URL}/api/auth/signup`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -67,7 +67,7 @@ export async function signIn({ email, password }: SignInData) {
   try {
     console.log('[API signIn] Starting sign in for:', email)
 
-    const response = await fetch(`${env.API_URL}/auth/signin`, {
+    const response = await fetch(`${env.API_URL}/api/auth/signin`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -102,7 +102,7 @@ export async function signIn({ email, password }: SignInData) {
  */
 export async function signOut() {
   try {
-    const response = await fetch(`${env.API_URL}/auth/signout`, {
+    const response = await fetch(`${env.API_URL}/api/auth/signout`, {
       method: 'POST',
       credentials: 'include',
     })
@@ -125,7 +125,7 @@ export async function getUserProfile(authId: string): Promise<UserProfile | null
   try {
     console.log('[API getUserProfile] Fetching profile for auth_id:', authId)
 
-    const response = await fetch(`${env.API_URL}/auth/profile/${authId}`, {
+    const response = await fetch(`${env.API_URL}/api/auth/profile/${authId}`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
@@ -155,7 +155,7 @@ export async function getUserProfile(authId: string): Promise<UserProfile | null
  */
 export async function completeSignup(authId: string) {
   try {
-    const response = await fetch(`${env.API_URL}/auth/profile/${authId}/complete-signup`, {
+    const response = await fetch(`${env.API_URL}/api/auth/profile/${authId}/complete-signup`, {
       method: 'PATCH',
       credentials: 'include',
     })

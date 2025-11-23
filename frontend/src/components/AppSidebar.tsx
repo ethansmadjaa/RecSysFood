@@ -1,7 +1,7 @@
 import { Home, UtensilsCrossed, Heart, Settings, LogOut, User } from "lucide-react"
 import {
   Sidebar,
-  SidebarContent,
+  SidebarContent, 
   SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
@@ -42,7 +42,7 @@ const menuItems = [
     title: "Settings",
     url: "/settings",
     icon: Settings,
-  },
+  }
 ]
 
 export function AppSidebar() {

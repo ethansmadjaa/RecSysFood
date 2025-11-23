@@ -9,4 +9,4 @@ front:
 	cd frontend && pnpm i && pnpm dev
 
 back:
-	pip install uv && uv sync && uv run fastapi dev main.py
+	pip install uv && uv sync && uv run main.py

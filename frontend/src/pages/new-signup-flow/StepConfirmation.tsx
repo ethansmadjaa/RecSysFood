@@ -1,5 +1,6 @@
 import { Badge } from '@/components/ui/badge'
 import type { SignupFormData } from '@/pages/NewSignupFlow'
+import type { CalorieGoal, ProteinGoal } from '@/lib/api/preferences'
 
 interface StepProps {
   data: SignupFormData
@@ -22,7 +23,10 @@ const restrictionLabels: Record<string, string> = {
   none: 'Aucune'
 }
 
-const nutritionLabels = {
+const nutritionLabels: {
+  calorie: Record<CalorieGoal, string>
+  protein: Record<ProteinGoal, string>
+} = {
   calorie: {
     low: 'Calories modérées',
     medium: 'Calories normales',

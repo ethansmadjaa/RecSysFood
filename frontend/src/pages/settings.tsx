@@ -14,7 +14,7 @@ import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { useEffect, useState } from 'react'
-import { getUserPreferences, type UserPreferencesResponse } from '@/lib/api/preferences'
+import { getUserPreferences, type UserPreferencesResponse, type MealType } from '@/lib/api/preferences'
 import { Clock, Utensils, Flame, Beef, ShieldAlert } from 'lucide-react'
 
 export function Settings() {
@@ -110,7 +110,7 @@ export function Settings() {
                         <Label>Preferred Meal Types</Label>
                       </div>
                       <div className="flex flex-wrap gap-2">
-                        {preferences.meal_types.map((mealType) => (
+                        {preferences.meal_types.map((mealType: MealType) => (
                           <Badge key={mealType} variant="secondary">
                             {formatMealType(mealType)}
                           </Badge>
@@ -157,7 +157,7 @@ export function Settings() {
                           <Label>Dietary Restrictions</Label>
                         </div>
                         <div className="flex flex-wrap gap-2">
-                          {preferences.dietary_restrictions.map((restriction) => (
+                          {preferences.dietary_restrictions.map((restriction: string) => (
                             <Badge key={restriction} variant="destructive">
                               {restriction}
                             </Badge>

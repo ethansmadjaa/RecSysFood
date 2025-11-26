@@ -1,4 +1,4 @@
-from lib.recipes import get_recipes
+from routes.recommendations import fetch_all_recipes
 import pandas as pd
 from utils.logger import logger
 import os
@@ -14,6 +14,6 @@ if os.path.exists(cache_path):
 else:
     logger.info("No cache file found, starting fresh")
     already_cached_df = pd.DataFrame()
-recipes = get_recipes()
+recipes = fetch_all_recipes()
 df = pd.DataFrame([recipe.model_dump(mode="json") for recipe in recipes])
 print(df.info())

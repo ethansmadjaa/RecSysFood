@@ -2,11 +2,12 @@ from dataclasses import dataclass
 from typing import List, Optional
 import pandas as pd
 import numpy as np
-from lib.recipes import get_recipes
+from utils.recipes_loader import fetch_all_recipes
 
 # ============================
 # 1. Modèle des préférences utilisateur (aligné sur le frontend)
 # ============================
+
 
 @dataclass
 class UserPreferencesInput:
@@ -20,6 +21,7 @@ class UserPreferencesInput:
     protein_goal: 'low', 'medium', 'high'
     dietary_restrictions: ['vegetarian', 'vegan', 'no_pork', 'no_alcohol', 'gluten_free']
     """
+
     meal_types: List[str]
     max_total_time: Optional[int]
     calorie_goal: str
@@ -35,6 +37,7 @@ class UserPreferencesInput:
 # ============================
 # 2. Helpers
 # ============================
+
 
 def build_meal_type_mask(df: pd.DataFrame, meal_types: List[str]) -> pd.Series:
     """
@@ -53,17 +56,17 @@ def build_meal_type_mask(df: pd.DataFrame, meal_types: List[str]) -> pd.Series:
     mask = pd.Series(False, index=df.index)
 
     if "breakfast_brunch" in meal_types and "is_breakfast_brunch" in df.columns:
-        mask |= (df["is_breakfast_brunch"] == True)
+        mask |= df["is_breakfast_brunch"]
 
     if "dessert" in meal_types and "is_dessert" in df.columns:
-        mask |= (df["is_dessert"] == True)
+        mask |= df["is_dessert"]
 
     if "snack" in meal_types and "is_dessert" in df.columns:
-        mask |= (df["is_dessert"] == True)
+        mask |= df["is_dessert"]
 
-    if ("main_course" in meal_types or "starter_side" in meal_types):
+    if "main_course" in meal_types or "starter_side" in meal_types:
         if {"is_breakfast_brunch", "is_dessert"}.issubset(df.columns):
-            mask |= (df["is_breakfast_brunch"] == False) & (df["is_dessert"] == False)
+            mask |= ~df["is_breakfast_brunch"] & ~df["is_dessert"]
 
     return mask
 
@@ -73,11 +76,7 @@ def map_goal_to_category(goal: str) -> Optional[str]:
     Convertit les valeurs frontend (lowercase) vers les valeurs de la DB (capitalized).
     'low' -> 'Low', 'medium' -> 'Medium', 'high' -> 'High'
     """
-    mapping = {
-        "low": "Low",
-        "medium": "Medium",
-        "high": "High"
-    }
+    mapping = {"low": "Low", "medium": "Medium", "high": "High"}
     return mapping.get(goal)
 
 
@@ -92,7 +91,10 @@ def safe_norm(s: pd.Series) -> pd.Series:
 # 3. Filtrage à partir des préférences
 # ============================
 
-def filter_recipes_with_preferences(df: pd.DataFrame, prefs: UserPreferencesInput) -> pd.DataFrame:
+
+def filter_recipes_with_preferences(
+    df: pd.DataFrame, prefs: UserPreferencesInput
+) -> pd.DataFrame:
     recipes = df.copy()
 
     # --- Type de plat / moment ---
@@ -114,36 +116,45 @@ def filter_recipes_with_preferences(df: pd.DataFrame, prefs: UserPreferencesInpu
         recipes = recipes[recipes["protein_category"] == protein_cat]
 
     # --- Restrictions alimentaires ---
-    if "vegetarian" in prefs.dietary_restrictions and "is_vegetarian" in recipes.columns:
-        recipes = recipes[recipes["is_vegetarian"] == True]
+    if (
+        "vegetarian" in prefs.dietary_restrictions
+        and "is_vegetarian" in recipes.columns
+    ):
+        recipes = recipes[recipes["is_vegetarian"]]
 
     if "vegan" in prefs.dietary_restrictions and "is_vegan" in recipes.columns:
-        recipes = recipes[recipes["is_vegan"] == True]
+        recipes = recipes[recipes["is_vegan"]]
 
     if "no_pork" in prefs.dietary_restrictions and "contains_pork" in recipes.columns:
-        recipes = recipes[recipes["contains_pork"] == False]
+        recipes = recipes[~recipes["contains_pork"]]
 
-    if "no_alcohol" in prefs.dietary_restrictions and "contains_alcohol" in recipes.columns:
-        recipes = recipes[recipes["contains_alcohol"] == False]
+    if (
+        "no_alcohol" in prefs.dietary_restrictions
+        and "contains_alcohol" in recipes.columns
+    ):
+        recipes = recipes[~recipes["contains_alcohol"]]
 
-    if "gluten_free" in prefs.dietary_restrictions and "contains_gluten" in recipes.columns:
-        recipes = recipes[recipes["contains_gluten"] == False]
+    if (
+        "gluten_free" in prefs.dietary_restrictions
+        and "contains_gluten" in recipes.columns
+    ):
+        recipes = recipes[~recipes["contains_gluten"]]
 
     # --- Allergies ---
     if prefs.allergy_nuts and "contains_nuts" in recipes.columns:
-        recipes = recipes[recipes["contains_nuts"] == False]
+        recipes = recipes[~recipes["contains_nuts"]]
 
     if prefs.allergy_dairy and "contains_dairy" in recipes.columns:
-        recipes = recipes[recipes["contains_dairy"] == False]
+        recipes = recipes[~recipes["contains_dairy"]]
 
     if prefs.allergy_egg and "contains_egg" in recipes.columns:
-        recipes = recipes[recipes["contains_egg"] == False]
+        recipes = recipes[~recipes["contains_egg"]]
 
     if prefs.allergy_fish and "contains_fish" in recipes.columns:
-        recipes = recipes[recipes["contains_fish"] == False]
+        recipes = recipes[~recipes["contains_fish"]]
 
     if prefs.allergy_soy and "contains_soy" in recipes.columns:
-        recipes = recipes[recipes["contains_soy"] == False]
+        recipes = recipes[~recipes["contains_soy"]]
 
     return recipes
 
@@ -152,12 +163,17 @@ def filter_recipes_with_preferences(df: pd.DataFrame, prefs: UserPreferencesInpu
 # 4. Scoring (qualité + nutrition)
 # ============================
 
-def add_scores_with_preferences(df: pd.DataFrame, prefs: UserPreferencesInput) -> pd.DataFrame:
+
+def add_scores_with_preferences(
+    df: pd.DataFrame, prefs: UserPreferencesInput
+) -> pd.DataFrame:
     recipes = df.copy()
 
     # --- Quality score : AggregatedRating + ReviewCount ---
     if "aggregatedrating" in recipes.columns:
-        rating = recipes["aggregatedrating"].fillna(recipes["aggregatedrating"].median())
+        rating = recipes["aggregatedrating"].fillna(
+            recipes["aggregatedrating"].median()
+        )
     else:
         rating = pd.Series(0.0, index=recipes.index)
 
@@ -173,21 +189,25 @@ def add_scores_with_preferences(df: pd.DataFrame, prefs: UserPreferencesInput) -
 
     # --- Nutrition score : basé sur Calories + ProteinContent + objectifs ---
     calories = recipes["calories"].astype(float).fillna(recipes["calories"].median())
-    proteins = recipes["proteincontent"].astype(float).fillna(recipes["proteincontent"].median())
+    proteins = (
+        recipes["proteincontent"]
+        .astype(float)
+        .fillna(recipes["proteincontent"].median())
+    )
 
     # Score calories : par défaut neutre
     cal_score = pd.Series(0.5, index=recipes.index)
     if prefs.calorie_goal == "low":
-        cal_score = safe_norm(-calories)    # moins = mieux
+        cal_score = safe_norm(-calories)  # moins = mieux
     elif prefs.calorie_goal == "high":
-        cal_score = safe_norm(calories)     # plus = mieux
+        cal_score = safe_norm(calories)  # plus = mieux
 
     # Score protéines
     prot_score = pd.Series(0.5, index=recipes.index)
     if prefs.protein_goal == "high":
-        prot_score = safe_norm(proteins)    # plus = mieux
+        prot_score = safe_norm(proteins)  # plus = mieux
     elif prefs.protein_goal == "low":
-        prot_score = safe_norm(-proteins)   # moins = mieux
+        prot_score = safe_norm(-proteins)  # moins = mieux
 
     recipes["nutrition_score"] = 0.5 * cal_score + 0.5 * prot_score
 
@@ -195,8 +215,7 @@ def add_scores_with_preferences(df: pd.DataFrame, prefs: UserPreferencesInput) -
     w_quality = 0.6
     w_nutrition = 0.4
     recipes["score_total"] = (
-        w_quality * recipes["quality_score"] +
-        w_nutrition * recipes["nutrition_score"]
+        w_quality * recipes["quality_score"] + w_nutrition * recipes["nutrition_score"]
     )
 
     return recipes
@@ -206,12 +225,13 @@ def add_scores_with_preferences(df: pd.DataFrame, prefs: UserPreferencesInput) -
 # 5. Algorithme complet : sélectionner 15 recettes
 # ============================
 
+
 def select_recipes_from_preferences(
     recipes_df: pd.DataFrame,
     prefs: UserPreferencesInput,
     n_display: int = 15,
     pool_size: int = 100,
-    random_state: Optional[int] = None
+    random_state: Optional[int] = None,
 ) -> pd.DataFrame:
     """
     1) Filtre les recettes avec les préférences utilisateur
@@ -250,7 +270,7 @@ def select_recipes_from_preferences(
         "is_dessert",
         "calorie_category",
         "protein_category",
-        "score_total"
+        "score_total",
     ]
     cols_for_front = [c for c in cols_for_front if c in selected.columns]
 
@@ -258,7 +278,7 @@ def select_recipes_from_preferences(
 
 
 if __name__ == "__main__":
-    recipes = get_recipes()
+    recipes = fetch_all_recipes()       
     df = pd.DataFrame([recipe.model_dump(mode="json") for recipe in recipes])
 
     prefs = UserPreferencesInput(

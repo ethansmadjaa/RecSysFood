@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
-from routes import auth, preferences
+from routes import auth, preferences, recommendations
 import uvicorn
 import asyncio
 import httpx
@@ -51,6 +51,7 @@ app.add_middleware(
 # Include routers
 app.include_router(auth.router)
 app.include_router(preferences.router)
+app.include_router(recommendations.router)
 
 # API routes
 @app.get("/api")

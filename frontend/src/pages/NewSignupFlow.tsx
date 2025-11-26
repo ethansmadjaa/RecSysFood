@@ -12,9 +12,11 @@ import { StepMealType } from '@/pages/new-signup-flow/StepMealType'
 import { StepCookingTime } from '@/pages/new-signup-flow/StepCookingTime'
 import { StepNutritionGoal } from '@/pages/new-signup-flow/StepNutritionGoal'
 import { StepDietaryRestrictions } from '@/pages/new-signup-flow/StepDietaryRestrictions'
+import { StepAllergies } from '@/pages/new-signup-flow/StepAllergies'
 import { StepConfirmation } from '@/pages/new-signup-flow/StepConfirmation'
+import { triggerRecommendations } from '@/lib/api/recommendations'
 
-const TOTAL_STEPS = 5
+const TOTAL_STEPS = 6
 
 export interface SignupFormData {
   mealTypes: MealType[]
@@ -22,6 +24,11 @@ export interface SignupFormData {
   calorieGoal: CalorieGoal
   proteinGoal: ProteinGoal
   dietaryRestrictions: string[]
+  allergyNuts: boolean
+  allergyDairy: boolean
+  allergyEgg: boolean
+  allergyFish: boolean
+  allergySoy: boolean
 }
 
 export function NewSignupFlow() {
@@ -35,7 +42,12 @@ export function NewSignupFlow() {
     maxTotalTime: null,
     calorieGoal: 'medium',
     proteinGoal: 'medium',
-    dietaryRestrictions: []
+    dietaryRestrictions: [],
+    allergyNuts: false,
+    allergyDairy: false,
+    allergyEgg: false,
+    allergyFish: false,
+    allergySoy: false
   })
 
   const progress = (currentStep / TOTAL_STEPS) * 100
@@ -83,13 +95,21 @@ export function NewSignupFlow() {
         max_total_time: formData.maxTotalTime,
         calorie_goal: formData.calorieGoal,
         protein_goal: formData.proteinGoal,
-        dietary_restrictions: formData.dietaryRestrictions
+        dietary_restrictions: formData.dietaryRestrictions,
+        allergy_nuts: formData.allergyNuts,
+        allergy_dairy: formData.allergyDairy,
+        allergy_egg: formData.allergyEgg,
+        allergy_fish: formData.allergyFish,
+        allergy_soy: formData.allergySoy
       })
 
       if (prefsError) {
         setError(prefsError as string)
         return
       }
+
+      // Trigger recommendation generation in background
+      await triggerRecommendations(UserObject.id)
 
       // Mark signup as complete
       const { error: signupError } = await completeSignup(UserObject.auth_id)
@@ -126,6 +146,8 @@ export function NewSignupFlow() {
       case 4:
         return <StepDietaryRestrictions data={formData} onUpdate={updateFormData} />
       case 5:
+        return <StepAllergies data={formData} onUpdate={updateFormData} />
+      case 6:
         return <StepConfirmation data={formData} />
       default:
         return null

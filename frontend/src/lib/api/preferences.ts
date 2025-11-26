@@ -11,6 +11,11 @@ export interface UserPreferences {
   calorie_goal: CalorieGoal
   protein_goal: ProteinGoal
   dietary_restrictions: string[]
+  allergy_nuts: boolean
+  allergy_dairy: boolean
+  allergy_egg: boolean
+  allergy_fish: boolean
+  allergy_soy: boolean
 }
 
 export interface UserPreferencesResponse {
@@ -21,6 +26,11 @@ export interface UserPreferencesResponse {
   calorie_goal: CalorieGoal
   protein_goal: ProteinGoal
   dietary_restrictions: string[]
+  allergy_nuts: boolean
+  allergy_dairy: boolean
+  allergy_egg: boolean
+  allergy_fish: boolean
+  allergy_soy: boolean
   created_at: string
   updated_at: string
 }

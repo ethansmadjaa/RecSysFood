@@ -30,6 +30,11 @@ class UserPreferencesRequest(BaseModel):
     calorie_goal: CalorieGoalEnum = CalorieGoalEnum.medium
     protein_goal: ProteinGoalEnum = ProteinGoalEnum.medium
     dietary_restrictions: List[str] = []
+    allergy_nuts: bool = False
+    allergy_dairy: bool = False
+    allergy_egg: bool = False
+    allergy_fish: bool = False
+    allergy_soy: bool = False
 
 class UserPreferencesResponse(BaseModel):
     user_preferences_id: int
@@ -39,6 +44,11 @@ class UserPreferencesResponse(BaseModel):
     calorie_goal: str
     protein_goal: str
     dietary_restrictions: List[str]
+    allergy_nuts: bool
+    allergy_dairy: bool
+    allergy_egg: bool
+    allergy_fish: bool
+    allergy_soy: bool
     created_at: str
     updated_at: str
 
@@ -56,7 +66,12 @@ async def create_user_preferences(preferences: UserPreferencesRequest):
             "max_total_time": preferences.max_total_time,
             "calorie_goal": preferences.calorie_goal.value,
             "protein_goal": preferences.protein_goal.value,
-            "dietary_restrictions": preferences.dietary_restrictions
+            "dietary_restrictions": preferences.dietary_restrictions,
+            "allergy_nuts": preferences.allergy_nuts,
+            "allergy_dairy": preferences.allergy_dairy,
+            "allergy_egg": preferences.allergy_egg,
+            "allergy_fish": preferences.allergy_fish,
+            "allergy_soy": preferences.allergy_soy
         }
 
         # Check if preferences already exist for this user

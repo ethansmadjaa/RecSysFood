@@ -160,3 +160,6 @@ Thumbs.db
 # Environment variables
 .env
 frontend/.env
+
+# Data
+data/

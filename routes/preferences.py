@@ -6,6 +6,7 @@ from enum import Enum
 
 router = APIRouter(prefix="/api/preferences", tags=["preferences"])
 
+
 class MealTypeEnum(str, Enum):
     breakfast_brunch = "breakfast_brunch"
     main_course = "main_course"
@@ -13,15 +14,18 @@ class MealTypeEnum(str, Enum):
     dessert = "dessert"
     snack = "snack"
 
+
 class CalorieGoalEnum(str, Enum):
     low = "low"
     medium = "medium"
     high = "high"
 
+
 class ProteinGoalEnum(str, Enum):
     low = "low"
     medium = "medium"
     high = "high"
+
 
 class UserPreferencesRequest(BaseModel):
     user_id: str
@@ -35,6 +39,7 @@ class UserPreferencesRequest(BaseModel):
     allergy_egg: bool = False
     allergy_fish: bool = False
     allergy_soy: bool = False
+
 
 class UserPreferencesResponse(BaseModel):
     user_preferences_id: int
@@ -51,6 +56,7 @@ class UserPreferencesResponse(BaseModel):
     allergy_soy: bool
     created_at: str
     updated_at: str
+
 
 @router.post("/", response_model=UserPreferencesResponse)
 async def create_user_preferences(preferences: UserPreferencesRequest):
@@ -71,22 +77,30 @@ async def create_user_preferences(preferences: UserPreferencesRequest):
             "allergy_dairy": preferences.allergy_dairy,
             "allergy_egg": preferences.allergy_egg,
             "allergy_fish": preferences.allergy_fish,
-            "allergy_soy": preferences.allergy_soy
+            "allergy_soy": preferences.allergy_soy,
         }
 
         # Check if preferences already exist for this user
-        existing = supabase.table('user_preferences').select('*').eq('user_id', preferences.user_id).execute()
+        existing = (
+            supabase.table("user_preferences")
+            .select("*")
+            .eq("user_id", preferences.user_id)
+            .execute()
+        )
 
         if existing.data:
             # Update existing preferences
-            response = supabase.table('user_preferences').update(
-                preferences_data
-            ).eq('user_id', preferences.user_id).execute()
+            response = (
+                supabase.table("user_preferences")
+                .update(preferences_data)
+                .eq("user_id", preferences.user_id)
+                .execute()
+            )
         else:
             # Insert new preferences
-            response = supabase.table('user_preferences').insert(
-                preferences_data
-            ).execute()
+            response = (
+                supabase.table("user_preferences").insert(preferences_data).execute()
+            )
 
         if not response.data:
             raise HTTPException(status_code=400, detail="Failed to save preferences")
@@ -96,13 +110,22 @@ async def create_user_preferences(preferences: UserPreferencesRequest):
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error saving preferences: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error saving preferences: {str(e)}"
+        )
+
 
 @router.get("/{user_id}", response_model=UserPreferencesResponse)
 async def get_user_preferences(user_id: str):
     """Get user preferences by user ID"""
     try:
-        response = supabase.table('user_preferences').select('*').eq('user_id', user_id).single().execute()
+        response = (
+            supabase.table("user_preferences")
+            .select("*")
+            .eq("user_id", user_id)
+            .single()
+            .execute()
+        )
 
         if not response.data:
             raise HTTPException(status_code=404, detail="User preferences not found")
@@ -115,14 +138,19 @@ async def get_user_preferences(user_id: str):
         if "Cannot coerce" in str(e):
             raise HTTPException(status_code=404, detail="User preferences not found")
         else:
-            raise HTTPException(status_code=500, detail=f"Error fetching preferences: {str(e)}")
+            raise HTTPException(
+                status_code=500, detail=f"Error fetching preferences: {str(e)}"
+            )
+
 
 @router.delete("/{user_id}")
 async def delete_user_preferences(user_id: str):
     """Delete user preferences"""
     try:
-        supabase.table('user_preferences').delete().eq('user_id', user_id).execute()
+        supabase.table("user_preferences").delete().eq("user_id", user_id).execute()
         return {"message": "Preferences deleted successfully"}
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error deleting preferences: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error deleting preferences: {str(e)}"
+        )

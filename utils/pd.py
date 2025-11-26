@@ -2,7 +2,6 @@
 This module is used to process the data and convert it to a format that can be used by the Supabase database.
 """
 
-
 import pandas as pd
 import numpy as np
 
@@ -13,7 +12,12 @@ print(df.head())
 
 
 def r_vector_to_list(x):
-    if x is None or (isinstance(x, float) and np.isnan(x)) or pd.isna(x) or pd.isnull(x):
+    if (
+        x is None
+        or (isinstance(x, float) and np.isnan(x))
+        or pd.isna(x)
+        or pd.isnull(x)
+    ):
         return None
 
     x = str(x).strip()
@@ -35,7 +39,7 @@ def r_vector_to_list(x):
     quote_char = None
 
     for i, char in enumerate(inner):
-        if char in ('"', "'") and (i == 0 or inner[i-1] != '\\'):
+        if char in ('"', "'") and (i == 0 or inner[i - 1] != "\\"):
             if not in_quotes:
                 in_quotes = True
                 quote_char = char
@@ -44,7 +48,7 @@ def r_vector_to_list(x):
                 quote_char = None
             else:
                 current += char
-        elif char == ',' and not in_quotes:
+        elif char == "," and not in_quotes:
             # On a trouvé une virgule hors des guillemets
             value = current.strip().strip('"').strip("'").strip()
             if value and value != "NA":
@@ -113,7 +117,6 @@ bool_cols = [
 for col in bool_cols:
     if col in df.columns:
         df[col] = df[col].astype(bool)
-
 
 
 df.to_csv("recipes.csv", index=False)

@@ -3,14 +3,14 @@ from typing import List, Optional
 import pandas as pd
 import numpy as np
 from utils.recipes_loader import fetch_all_recipes
+from pydantic import BaseModel
 
 # ============================
 # 1. Modèle des préférences utilisateur (aligné sur le frontend)
 # ============================
 
 
-@dataclass
-class UserPreferencesInput:
+class UserPreferencesInput(BaseModel):
     """
     Représente les préférences envoyées par le frontend.
     Format aligné sur les types TypeScript du frontend.

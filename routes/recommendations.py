@@ -1,26 +1,89 @@
-from lib.supabase import supabase
+from lib import supabase
 from fastapi import APIRouter, HTTPException, BackgroundTasks
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from typing import List, Optional
 import pandas as pd
+import ast
 
 from filtre_recommandation import UserPreferencesInput, select_recipes_from_preferences
 
 router = APIRouter(prefix="/api/recommendations", tags=["recommendations"])
 
 
+def parse_string_list(value) -> Optional[List[str]]:
+    """Parse a string representation of a list into an actual list."""
+    if value is None:
+        return None
+    if isinstance(value, list):
+        return value
+    if isinstance(value, str):
+        # Try to parse string representation of a list
+        try:
+            parsed = ast.literal_eval(value)
+            if isinstance(parsed, list):
+                return parsed
+        except (ValueError, SyntaxError):
+            pass
+        # If it's a plain string, return as single-item list
+        return [value] if value.strip() else None
+    return None
+
+
 class RecipeResponse(BaseModel):
     recipeid: int
     name: str
+    description: Optional[str]
+    authorname: Optional[str]
+    datepublished: Optional[str]
     images: Optional[List[str]]
+    recipecategory: Optional[str]
+    keywords: Optional[List[str]]
+    recipeingredientquantities: Optional[List[str]]
+    recipeingredientparts: Optional[List[str]]
+    recipeinstructions: Optional[List[str]]
+    cooktime_min: Optional[int]
+    preptime_min: Optional[int]
     totaltime_min: Optional[int]
+    recipeservings: Optional[int]
+    recipeyield: Optional[str]
     aggregatedrating: Optional[float]
     reviewcount: Optional[float]
+    # Nutrition
     calories: Optional[float]
+    fatcontent: Optional[float]
+    saturatedfatcontent: Optional[float]
+    cholesterolcontent: Optional[float]
+    sodiumcontent: Optional[float]
+    carbohydratecontent: Optional[float]
+    fibercontent: Optional[float]
+    sugarcontent: Optional[float]
     proteincontent: Optional[float]
+    # Dietary flags
     is_vegan: Optional[bool]
     is_vegetarian: Optional[bool]
+    contains_pork: Optional[bool]
+    contains_alcohol: Optional[bool]
+    contains_gluten: Optional[bool]
+    contains_nuts: Optional[bool]
+    contains_dairy: Optional[bool]
+    contains_egg: Optional[bool]
+    contains_fish: Optional[bool]
+    contains_soy: Optional[bool]
+    # Meal type flags
+    is_breakfast_brunch: Optional[bool]
+    is_dessert: Optional[bool]
+    # Categories
+    calorie_category: Optional[str]
+    protein_category: Optional[str]
+    # Recommendation score
     score: Optional[float]
+
+    # Validators to handle string representations of lists from the database
+    @field_validator('images', 'keywords', 'recipeingredientquantities',
+                     'recipeingredientparts', 'recipeinstructions', mode='before')
+    @classmethod
+    def parse_list_fields(cls, v):
+        return parse_string_list(v)
 
 
 class RecommendationsResponse(BaseModel):
@@ -30,10 +93,13 @@ class RecommendationsResponse(BaseModel):
 
 def fetch_all_recipes() -> pd.DataFrame:
     """Fetch all recipes from Supabase"""
-    response = supabase.table('recipes').select('*').execute()
-    if not response.data:
+    df = pd.read_csv('utils/recipes.csv')
+    if not df.empty:
+        # Normalize column names to lowercase for consistency
+        df.columns = df.columns.str.lower()
+        return df
+    else:
         return pd.DataFrame()
-    return pd.DataFrame(response.data)
 
 
 def generate_recommendations_task(user_id: str):
@@ -104,54 +170,85 @@ async def trigger_generate_recommendations(user_id: str, background_tasks: Backg
 
     return {"status": "generating", "message": "Recommendation generation started"}
 
-
 @router.get("/{user_id}", response_model=RecommendationsResponse)
 async def get_user_recommendations(user_id: str):
     """Get user's active recommendations with recipe details"""
     try:
+        print(f"Fetching recommendations for user: {user_id}")
+        
         # Get active recommendations for user
-        recs_response = supabase.table('user_recommendations').select(
-            'recipe_id, score'
-        ).eq('user_id', user_id).eq('is_active', True).execute()
+        try:
+            recs_response = supabase.table('user_recommendations').select(
+                'recipe_id, score'
+            ).eq('user_id', user_id).eq('is_active', True).execute()
+            print(f"Recommendations query response: {recs_response.data}")
+        except Exception as e:
+            print(f"Error fetching user recommendations from database: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"Database error fetching recommendations: {str(e)}")
 
         if not recs_response.data:
+            print(f"No recommendations found for user: {user_id}")
             return RecommendationsResponse(status="not_found", recipes=[])
 
         # Get recipe IDs
-        recipe_ids = [rec['recipe_id'] for rec in recs_response.data]
-        scores_map = {rec['recipe_id']: rec['score'] for rec in recs_response.data}
+        try:
+            recipe_ids = [rec['recipe_id'] for rec in recs_response.data]
+            scores_map = {rec['recipe_id']: rec['score'] for rec in recs_response.data}
+            print(f"Found {len(recipe_ids)} recipe IDs: {recipe_ids}")
+        except Exception as e:
+            print(f"Error processing recommendation data: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"Error processing recommendation data: {str(e)}")
 
         # Fetch recipe details
-        recipes_response = supabase.table('recipes').select(
-            'recipeid, name, images, totaltime_min, aggregatedrating, reviewcount, calories, proteincontent, is_vegan, is_vegetarian'
-        ).in_('recipeid', recipe_ids).execute()
+        try:
+            recipes_response = supabase.table('recipes').select(
+                '*'
+            ).in_('recipeid', recipe_ids).execute()
+            print(f"Recipes query returned {len(recipes_response.data) if recipes_response.data else 0} recipes")
+        except Exception as e:
+            print(f"Error fetching recipe details from database: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"Database error fetching recipe details: {str(e)}")
 
         if not recipes_response.data:
+            print(f"No recipe details found for recipe IDs: {recipe_ids}")
             return RecommendationsResponse(status="not_found", recipes=[])
 
         # Build response with scores
         recipes = []
         for recipe in recipes_response.data:
-            recipes.append(RecipeResponse(
-                recipeid=recipe['recipeid'],
-                name=recipe['name'],
-                images=recipe.get('images'),
-                totaltime_min=recipe.get('totaltime_min'),
-                aggregatedrating=recipe.get('aggregatedrating'),
-                reviewcount=recipe.get('reviewcount'),
-                calories=recipe.get('calories'),
-                proteincontent=recipe.get('proteincontent'),
-                is_vegan=recipe.get('is_vegan'),
-                is_vegetarian=recipe.get('is_vegetarian'),
-                score=scores_map.get(recipe['recipeid'])
-            ))
+            try:
+                # Add score to recipe data and pass as dict for validators to process
+                recipe_data = {**recipe, 'score': scores_map.get(recipe['recipeid'])}
+                recipe_obj = RecipeResponse.model_validate(recipe_data)
+                recipes.append(recipe_obj)
+            except Exception as e:
+                print(f"Error building RecipeResponse for recipe {recipe.get('recipeid')}: {str(e)}")
+                # Continue processing other recipes instead of failing completely
+                continue
+
+        print(f"Successfully built {len(recipes)} recipe objects")
 
         # Sort by score descending
-        recipes.sort(key=lambda x: x.score or 0, reverse=True)
+        try:
+            recipes.sort(key=lambda x: x.score or 0, reverse=True)
+            print(f"Sorted recipes by score")
+        except Exception as e:
+            print(f"Error sorting recipes: {str(e)}")
+            # Continue without sorting if there's an error
 
-        return RecommendationsResponse(status="ready", recipes=recipes)
+        try:
+            response = RecommendationsResponse(status="ready", recipes=recipes)
+            print(f"Successfully created RecommendationsResponse with {len(recipes)} recipes")
+            return response.model_dump()
+        except Exception as e:
+            print(f"Error creating response model: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"Error creating response: {str(e)}")
 
+    except HTTPException:
+        # Re-raise HTTP exceptions as-is
+        raise
     except Exception as e:
+        print(f"Unexpected error in get_user_recommendations for user {user_id}: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error fetching recommendations: {str(e)}")
 
 

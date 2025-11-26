@@ -6,14 +6,50 @@ const API_URL = env.API_URL
 export interface Recipe {
   recipeid: number
   name: string
+  description: string | null
+  authorname: string | null
+  datepublished: string | null
   images: string[] | null
+  recipecategory: string | null
+  keywords: string[] | null
+  recipeingredientquantities: string[] | null
+  recipeingredientparts: string[] | null
+  recipeinstructions: string[] | null
+  cooktime_min: number | null
+  preptime_min: number | null
   totaltime_min: number | null
+  recipeservings: number | null
+  recipeyield: string | null
   aggregatedrating: number | null
   reviewcount: number | null
+  // Nutrition
   calories: number | null
+  fatcontent: number | null
+  saturatedfatcontent: number | null
+  cholesterolcontent: number | null
+  sodiumcontent: number | null
+  carbohydratecontent: number | null
+  fibercontent: number | null
+  sugarcontent: number | null
   proteincontent: number | null
+  // Dietary flags
   is_vegan: boolean | null
   is_vegetarian: boolean | null
+  contains_pork: boolean | null
+  contains_alcohol: boolean | null
+  contains_gluten: boolean | null
+  contains_nuts: boolean | null
+  contains_dairy: boolean | null
+  contains_egg: boolean | null
+  contains_fish: boolean | null
+  contains_soy: boolean | null
+  // Meal type flags
+  is_breakfast_brunch: boolean | null
+  is_dessert: boolean | null
+  // Categories
+  calorie_category: string | null
+  protein_category: string | null
+  // Recommendation score
   score: number | null
 }
 

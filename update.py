@@ -49,7 +49,7 @@ df.to_csv("utils/recipes.csv", index=False)
 
 # Process in batches for better performance
 BATCH_SIZE = 1000
-SKIP_FIRST = 42000  # Skip the first 31000 recipes
+SKIP_FIRST = 52000  # Skip the first 31000 recipes
 total_rows = len(new_df)
 
 print(f"Skipping first {SKIP_FIRST} recipes, starting from recipe {SKIP_FIRST + 1}")

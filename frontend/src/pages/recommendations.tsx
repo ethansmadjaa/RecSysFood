@@ -510,20 +510,38 @@ export function Recommendations() {
               </TabsContent>
 
               <TabsContent value="instructions" className="mt-4">
-                {recipe.recipeinstructions && recipe.recipeinstructions.length > 0 ? (
-                  <ol className="space-y-3">
-                    {recipe.recipeinstructions.map((instruction, index) => (
-                      <li key={index} className="flex gap-3 p-3 bg-muted rounded-lg">
-                        <span className="shrink-0 w-6 h-6 rounded-full bg-primary text-primary-foreground text-sm flex items-center justify-center">
-                          {index + 1}
-                        </span>
-                        <span className="text-sm">{instruction}</span>
-                      </li>
-                    ))}
-                  </ol>
-                ) : (
-                  <p className="text-sm text-muted-foreground">Instructions non disponibles</p>
-                )}
+                {(() => {
+                  let instructions: string[] = []
+                  if (recipe.recipeinstructions) {
+                    if (Array.isArray(recipe.recipeinstructions)) {
+                      instructions = recipe.recipeinstructions
+                    } else if (typeof recipe.recipeinstructions === 'string') {
+                      const str = recipe.recipeinstructions.trim()
+                      // Check if it's a Python-style array string: ['item1', 'item2']
+                      if (str.startsWith('[') && str.endsWith(']')) {
+                        // Extract content between brackets and split by "', '"
+                        const content = str.slice(2, -2) // Remove [' and ']
+                        instructions = content.split("', '").map((s: string) => s.trim())
+                      } else {
+                        instructions = [str]
+                      }
+                    }
+                  }
+                  return instructions.length > 0 ? (
+                    <ol className="space-y-3">
+                      {instructions.map((instruction, index) => (
+                        <li key={index} className="flex gap-3 p-3 bg-muted rounded-lg">
+                          <span className="shrink-0 w-6 h-6 rounded-full bg-primary text-primary-foreground text-sm flex items-center justify-center">
+                            {index + 1}
+                          </span>
+                          <span className="text-sm">{instruction}</span>
+                        </li>
+                      ))}
+                    </ol>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">Instructions non disponibles</p>
+                  )
+                })()}
               </TabsContent>
 
               <TabsContent value="nutrition" className="mt-4">

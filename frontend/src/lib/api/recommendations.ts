@@ -14,7 +14,7 @@ export interface Recipe {
   keywords: string[] | null
   recipeingredientquantities: string[] | null
   recipeingredientparts: string[] | null
-  recipeinstructions: string[] | null
+  recipeinstructions: string | string[] | null
   cooktime_min: number | null
   preptime_min: number | null
   totaltime_min: number | null

@@ -425,7 +425,7 @@ export function Favorites() {
                       if (str.startsWith('[') && str.endsWith(']')) {
                         // Extract content between brackets and split by "', '"
                         const content = str.slice(2, -2) // Remove [' and ']
-                        instructions = content.split("', '").map(s => s.trim())
+                        instructions = content.split("', '").map((s: string) => s.trim())
                       } else {
                         instructions = [str]
                       }

@@ -25,6 +25,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Heart, ChefHat, Clock, Star, Loader2, Flame, Drumstick, Leaf, RefreshCw, Users, Calendar, AlertTriangle, Utensils, Timer } from 'lucide-react'
 import { getUserRecommendations, triggerRecommendations, type Recipe, type RecommendationsResponse } from '@/lib/api/recommendations'
 import { getUserProfile } from '@/lib/api/auth'
+import { getUserFavoriteIds, toggleFavorite } from '@/lib/api/favorites'
+import { toast } from 'sonner'
 
 export function Recommendations() {
   const { user } = useAuth()
@@ -34,6 +36,15 @@ export function Recommendations() {
   const [status, setStatus] = useState<RecommendationsResponse['status']>('generating')
   const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null)
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [favoriteIds, setFavoriteIds] = useState<Set<number>>(new Set())
+  const [userProfileId, setUserProfileId] = useState<string | null>(null)
+
+  const fetchFavorites = async (profileId: string) => {
+    const { data } = await getUserFavoriteIds(profileId)
+    if (data) {
+      setFavoriteIds(new Set(data))
+    }
+  }
 
   const fetchRecommendations = async () => {
     if (!user) return
@@ -41,6 +52,11 @@ export function Recommendations() {
     try {
       const userProfile = await getUserProfile(user.id)
       if (!userProfile) return
+
+      setUserProfileId(userProfile.id)
+
+      // Fetch favorites in parallel
+      fetchFavorites(userProfile.id)
 
       const { data } = await getUserRecommendations(userProfile.id)
 
@@ -65,6 +81,41 @@ export function Recommendations() {
       setLoading(false)
       setRefreshing(false)
       return true
+    }
+  }
+
+  const handleToggleFavorite = async (recipeId: number) => {
+    if (!userProfileId) return
+
+    const isFav = favoriteIds.has(recipeId)
+
+    // Optimistic update
+    setFavoriteIds(prev => {
+      const newSet = new Set(prev)
+      if (isFav) {
+        newSet.delete(recipeId)
+      } else {
+        newSet.add(recipeId)
+      }
+      return newSet
+    })
+
+    const { success, error } = await toggleFavorite(userProfileId, recipeId, isFav)
+
+    if (!success) {
+      // Revert on error
+      setFavoriteIds(prev => {
+        const newSet = new Set(prev)
+        if (isFav) {
+          newSet.add(recipeId)
+        } else {
+          newSet.delete(recipeId)
+        }
+        return newSet
+      })
+      toast.error(error || 'Erreur lors de la mise a jour des favoris')
+    } else {
+      toast.success(isFav ? 'Retire des favoris' : 'Ajoute aux favoris')
     }
   }
 
@@ -169,7 +220,7 @@ export function Recommendations() {
   const RecipeCard = ({ recipe }: { recipe: Recipe }) => {
     const originalImageUrl = recipe.images?.[0] || null
     const fallbackImageUrl = getUnsplashFoodImage(recipe.recipeid)
-    const [liked, setLiked] = useState(false)
+    const isFavorite = favoriteIds.has(recipe.recipeid)
 
     return (
       <Card className="group overflow-hidden transition-all hover:shadow-lg">
@@ -187,13 +238,13 @@ export function Recommendations() {
           <Button
             variant="secondary"
             size="icon"
-            className="absolute right-2 top-2 h-8 w-8 rounded-full opacity-0 transition-opacity group-hover:opacity-100"
+            className={`absolute right-2 top-2 h-8 w-8 rounded-full transition-opacity ${isFavorite ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
             onClick={(e) => {
               e.stopPropagation()
-              setLiked(!liked)
+              handleToggleFavorite(recipe.recipeid)
             }}
           >
-            <Heart className={`h-4 w-4 ${liked ? 'fill-red-500 text-red-500' : ''}`} />
+            <Heart className={`h-4 w-4 ${isFavorite ? 'fill-red-500 text-red-500' : ''}`} />
           </Button>
           {recipe.aggregatedrating && recipe.aggregatedrating >= 4.5 && (
             <Badge className="absolute left-2 top-2 bg-yellow-500 text-yellow-950">
@@ -281,6 +332,7 @@ export function Recommendations() {
   const RecipeDetailDialog = ({ recipe }: { recipe: Recipe }) => {
     const originalImageUrl = recipe.images?.[0] || null
     const fallbackImageUrl = getUnsplashFoodImage(recipe.recipeid)
+    const isFavorite = favoriteIds.has(recipe.recipeid)
 
     // Combine ingredients with quantities
     const ingredients = recipe.recipeingredientparts?.map((part, index) => ({
@@ -301,11 +353,22 @@ export function Recommendations() {
 
     return (
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
-        <DialogHeader>
-          <DialogTitle className="text-xl">{recipe.name}</DialogTitle>
-          {recipe.authorname && (
-            <p className="text-sm text-muted-foreground">Par {recipe.authorname}</p>
-          )}
+        <DialogHeader className="flex flex-row items-start justify-between gap-4">
+          <div className="flex-1">
+            <DialogTitle className="text-xl">{recipe.name}</DialogTitle>
+            {recipe.authorname && (
+              <p className="text-sm text-muted-foreground">Par {recipe.authorname}</p>
+            )}
+          </div>
+          <Button
+            variant={isFavorite ? "default" : "outline"}
+            size="sm"
+            onClick={() => handleToggleFavorite(recipe.recipeid)}
+            className="shrink-0"
+          >
+            <Heart className={`h-4 w-4 mr-2 ${isFavorite ? 'fill-current' : ''}`} />
+            {isFavorite ? 'Favori' : 'Ajouter aux favoris'}
+          </Button>
         </DialogHeader>
 
         <ScrollArea className="flex-1 pr-4">

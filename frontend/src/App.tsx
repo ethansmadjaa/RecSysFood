@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router'
 import { AuthProvider } from '@/contexts/AuthContext'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
+import { Toaster } from 'sonner'
 
 // Pages
 import { Login } from '@/pages/auth/Login'
@@ -17,6 +18,7 @@ function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
+        <Toaster richColors position="top-right" />
         <Routes>
           {/* Public routes */}
           <Route path="/" element={<Navigate to="/auth/login" replace />} />

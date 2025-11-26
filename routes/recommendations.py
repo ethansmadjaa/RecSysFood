@@ -178,66 +178,35 @@ async def trigger_generate_recommendations(
 
     return {"status": "generating", "message": "Recommendation generation started"}
 
-
 @router.get("/{user_id}", response_model=RecommendationsResponse)
 async def get_user_recommendations(user_id: str):
     """Get user's active recommendations with recipe details"""
     try:
-        print(f"Fetching recommendations for user: {user_id}")
-
         # Get active recommendations for user
-        try:
-            recs_response = (
-                supabase.table("user_recommendations")
-                .select("recipe_id, score")
-                .eq("user_id", user_id)
-                .eq("is_active", True)
-                .execute()
-            )
-            print(f"Recommendations query response: {recs_response.data}")
-        except Exception as e:
-            print(f"Error fetching user recommendations from database: {str(e)}")
-            raise HTTPException(
-                status_code=500,
-                detail=f"Database error fetching recommendations: {str(e)}",
-            )
+        recs_response = (
+            supabase.table("user_recommendations")
+            .select("recipe_id, score")
+            .eq("user_id", user_id)
+            .eq("is_active", True)
+            .execute()
+        )
 
         if not recs_response.data:
-            print(f"No recommendations found for user: {user_id}")
             return RecommendationsResponse(status="not_found", recipes=[])
 
-        # Get recipe IDs
-        try:
-            recipe_ids = [rec["recipe_id"] for rec in recs_response.data]
-            scores_map = {rec["recipe_id"]: rec["score"] for rec in recs_response.data}
-            print(f"Found {len(recipe_ids)} recipe IDs: {recipe_ids}")
-        except Exception as e:
-            print(f"Error processing recommendation data: {str(e)}")
-            raise HTTPException(
-                status_code=500,
-                detail=f"Error processing recommendation data: {str(e)}",
-            )
+        # Get recipe IDs and scores
+        recipe_ids = [rec["recipe_id"] for rec in recs_response.data]
+        scores_map = {rec["recipe_id"]: rec["score"] for rec in recs_response.data}
 
         # Fetch recipe details
-        try:
-            recipes_response = (
-                supabase.table("recipes")
-                .select("*")
-                .in_("recipeid", recipe_ids)
-                .execute()
-            )
-            print(
-                f"Recipes query returned {len(recipes_response.data) if recipes_response.data else 0} recipes"
-            )
-        except Exception as e:
-            print(f"Error fetching recipe details from database: {str(e)}")
-            raise HTTPException(
-                status_code=500,
-                detail=f"Database error fetching recipe details: {str(e)}",
-            )
+        recipes_response = (
+            supabase.table("recipes")
+            .select("*")
+            .in_("recipeid", recipe_ids)
+            .execute()
+        )
 
         if not recipes_response.data:
-            print(f"No recipe details found for recipe IDs: {recipe_ids}")
             return RecommendationsResponse(status="not_found", recipes=[])
 
         # Build response with scores
@@ -248,46 +217,22 @@ async def get_user_recommendations(user_id: str):
                 recipe_data = {**recipe, "score": scores_map.get(recipe["recipeid"])}
                 recipe_obj = RecipeResponse.model_validate(recipe_data)
                 recipes.append(recipe_obj)
-            except Exception as e:
-                print(
-                    f"Error building RecipeResponse for recipe {recipe.get('recipeid')}: {str(e)}"
-                )
+            except Exception:
                 # Continue processing other recipes instead of failing completely
                 continue
 
-        print(f"Successfully built {len(recipes)} recipe objects")
-
         # Sort by score descending
-        try:
-            recipes.sort(key=lambda x: x.score or 0, reverse=True)
-            print("Sorted recipes by score")
-        except Exception as e:
-            print(f"Error sorting recipes: {str(e)}")
-            # Continue without sorting if there's an error
+        recipes.sort(key=lambda x: x.score or 0, reverse=True)
 
-        try:
-            response = RecommendationsResponse(status="ready", recipes=recipes)
-            print(
-                f"Successfully created RecommendationsResponse with {len(recipes)} recipes"
-            )
-            return response.model_dump()
-        except Exception as e:
-            print(f"Error creating response model: {str(e)}")
-            raise HTTPException(
-                status_code=500, detail=f"Error creating response: {str(e)}"
-            )
+        return RecommendationsResponse(status="ready", recipes=recipes)
 
     except HTTPException:
         # Re-raise HTTP exceptions as-is
         raise
     except Exception as e:
-        print(
-            f"Unexpected error in get_user_recommendations for user {user_id}: {str(e)}"
-        )
         raise HTTPException(
             status_code=500, detail=f"Error fetching recommendations: {str(e)}"
         )
-
 
 @router.delete("/{user_id}")
 async def delete_user_recommendations(user_id: str):

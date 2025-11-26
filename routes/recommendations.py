@@ -6,6 +6,7 @@ import pandas as pd
 import ast
 
 from filtre_recommandation import UserPreferencesInput, select_recipes_from_preferences
+from utils.recipes_loader import fetch_all_recipes
 
 router = APIRouter(prefix="/api/recommendations", tags=["recommendations"])
 
@@ -79,8 +80,14 @@ class RecipeResponse(BaseModel):
     score: Optional[float]
 
     # Validators to handle string representations of lists from the database
-    @field_validator('images', 'keywords', 'recipeingredientquantities',
-                     'recipeingredientparts', 'recipeinstructions', mode='before')
+    @field_validator(
+        "images",
+        "keywords",
+        "recipeingredientquantities",
+        "recipeingredientparts",
+        "recipeinstructions",
+        mode="before",
+    )
     @classmethod
     def parse_list_fields(cls, v):
         return parse_string_list(v)
@@ -91,22 +98,19 @@ class RecommendationsResponse(BaseModel):
     recipes: List[RecipeResponse]
 
 
-def fetch_all_recipes() -> pd.DataFrame:
-    """Fetch all recipes from Supabase"""
-    df = pd.read_csv('utils/recipes.csv')
-    if not df.empty:
-        # Normalize column names to lowercase for consistency
-        df.columns = df.columns.str.lower()
-        return df
-    else:
-        return pd.DataFrame()
 
 
 def generate_recommendations_task(user_id: str):
     """Background task to generate recommendations for a user"""
     try:
         # 1. Fetch user preferences
-        prefs_response = supabase.table('user_preferences').select('*').eq('user_id', user_id).single().execute()
+        prefs_response = (
+            supabase.table("user_preferences")
+            .select("*")
+            .eq("user_id", user_id)
+            .single()
+            .execute()
+        )
 
         if not prefs_response.data:
             print(f"No preferences found for user {user_id}")
@@ -116,16 +120,16 @@ def generate_recommendations_task(user_id: str):
 
         # 2. Create UserPreferencesInput from database data
         prefs = UserPreferencesInput(
-            meal_types=prefs_data.get('meal_types', []),
-            max_total_time=prefs_data.get('max_total_time'),
-            calorie_goal=prefs_data.get('calorie_goal', 'medium'),
-            protein_goal=prefs_data.get('protein_goal', 'medium'),
-            dietary_restrictions=prefs_data.get('dietary_restrictions', []),
-            allergy_nuts=prefs_data.get('allergy_nuts', False),
-            allergy_dairy=prefs_data.get('allergy_dairy', False),
-            allergy_egg=prefs_data.get('allergy_egg', False),
-            allergy_fish=prefs_data.get('allergy_fish', False),
-            allergy_soy=prefs_data.get('allergy_soy', False),
+            meal_types=prefs_data.get("meal_types", []),
+            max_total_time=prefs_data.get("max_total_time"),
+            calorie_goal=prefs_data.get("calorie_goal", "medium"),
+            protein_goal=prefs_data.get("protein_goal", "medium"),
+            dietary_restrictions=prefs_data.get("dietary_restrictions", []),
+            allergy_nuts=prefs_data.get("allergy_nuts", False),
+            allergy_dairy=prefs_data.get("allergy_dairy", False),
+            allergy_egg=prefs_data.get("allergy_egg", False),
+            allergy_fish=prefs_data.get("allergy_fish", False),
+            allergy_soy=prefs_data.get("allergy_soy", False),
         )
 
         # 3. Fetch all recipes
@@ -139,17 +143,17 @@ def generate_recommendations_task(user_id: str):
         selected_recipes = select_recipes_from_preferences(recipes_df, prefs)
 
         # 5. Clear old recommendations for this user
-        supabase.table('user_recommendations').delete().eq('user_id', user_id).execute()
+        supabase.table("user_recommendations").delete().eq("user_id", user_id).execute()
 
         # 6. Insert new recommendations
         for _, recipe in selected_recipes.iterrows():
             recommendation_data = {
                 "user_id": user_id,
-                "recipe_id": int(recipe['recipeid']),
-                "score": float(recipe.get('score_total', 0)),
-                "is_active": True
+                "recipe_id": int(recipe["recipeid"]),
+                "score": float(recipe.get("score_total", 0)),
+                "is_active": True,
             }
-            supabase.table('user_recommendations').insert(recommendation_data).execute()
+            supabase.table("user_recommendations").insert(recommendation_data).execute()
 
         print(f"Generated {len(selected_recipes)} recommendations for user {user_id}")
 
@@ -158,10 +162,14 @@ def generate_recommendations_task(user_id: str):
 
 
 @router.post("/{user_id}/generate")
-async def trigger_generate_recommendations(user_id: str, background_tasks: BackgroundTasks):
+async def trigger_generate_recommendations(
+    user_id: str, background_tasks: BackgroundTasks
+):
     """Trigger recommendation generation in background"""
     # Verify user exists
-    user_response = supabase.table('users').select('id').eq('id', user_id).single().execute()
+    user_response = (
+        supabase.table("users").select("id").eq("id", user_id).single().execute()
+    )
     if not user_response.data:
         raise HTTPException(status_code=404, detail="User not found")
 
@@ -170,21 +178,29 @@ async def trigger_generate_recommendations(user_id: str, background_tasks: Backg
 
     return {"status": "generating", "message": "Recommendation generation started"}
 
+
 @router.get("/{user_id}", response_model=RecommendationsResponse)
 async def get_user_recommendations(user_id: str):
     """Get user's active recommendations with recipe details"""
     try:
         print(f"Fetching recommendations for user: {user_id}")
-        
+
         # Get active recommendations for user
         try:
-            recs_response = supabase.table('user_recommendations').select(
-                'recipe_id, score'
-            ).eq('user_id', user_id).eq('is_active', True).execute()
+            recs_response = (
+                supabase.table("user_recommendations")
+                .select("recipe_id, score")
+                .eq("user_id", user_id)
+                .eq("is_active", True)
+                .execute()
+            )
             print(f"Recommendations query response: {recs_response.data}")
         except Exception as e:
             print(f"Error fetching user recommendations from database: {str(e)}")
-            raise HTTPException(status_code=500, detail=f"Database error fetching recommendations: {str(e)}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"Database error fetching recommendations: {str(e)}",
+            )
 
         if not recs_response.data:
             print(f"No recommendations found for user: {user_id}")
@@ -192,22 +208,33 @@ async def get_user_recommendations(user_id: str):
 
         # Get recipe IDs
         try:
-            recipe_ids = [rec['recipe_id'] for rec in recs_response.data]
-            scores_map = {rec['recipe_id']: rec['score'] for rec in recs_response.data}
+            recipe_ids = [rec["recipe_id"] for rec in recs_response.data]
+            scores_map = {rec["recipe_id"]: rec["score"] for rec in recs_response.data}
             print(f"Found {len(recipe_ids)} recipe IDs: {recipe_ids}")
         except Exception as e:
             print(f"Error processing recommendation data: {str(e)}")
-            raise HTTPException(status_code=500, detail=f"Error processing recommendation data: {str(e)}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"Error processing recommendation data: {str(e)}",
+            )
 
         # Fetch recipe details
         try:
-            recipes_response = supabase.table('recipes').select(
-                '*'
-            ).in_('recipeid', recipe_ids).execute()
-            print(f"Recipes query returned {len(recipes_response.data) if recipes_response.data else 0} recipes")
+            recipes_response = (
+                supabase.table("recipes")
+                .select("*")
+                .in_("recipeid", recipe_ids)
+                .execute()
+            )
+            print(
+                f"Recipes query returned {len(recipes_response.data) if recipes_response.data else 0} recipes"
+            )
         except Exception as e:
             print(f"Error fetching recipe details from database: {str(e)}")
-            raise HTTPException(status_code=500, detail=f"Database error fetching recipe details: {str(e)}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"Database error fetching recipe details: {str(e)}",
+            )
 
         if not recipes_response.data:
             print(f"No recipe details found for recipe IDs: {recipe_ids}")
@@ -218,11 +245,13 @@ async def get_user_recommendations(user_id: str):
         for recipe in recipes_response.data:
             try:
                 # Add score to recipe data and pass as dict for validators to process
-                recipe_data = {**recipe, 'score': scores_map.get(recipe['recipeid'])}
+                recipe_data = {**recipe, "score": scores_map.get(recipe["recipeid"])}
                 recipe_obj = RecipeResponse.model_validate(recipe_data)
                 recipes.append(recipe_obj)
             except Exception as e:
-                print(f"Error building RecipeResponse for recipe {recipe.get('recipeid')}: {str(e)}")
+                print(
+                    f"Error building RecipeResponse for recipe {recipe.get('recipeid')}: {str(e)}"
+                )
                 # Continue processing other recipes instead of failing completely
                 continue
 
@@ -231,32 +260,42 @@ async def get_user_recommendations(user_id: str):
         # Sort by score descending
         try:
             recipes.sort(key=lambda x: x.score or 0, reverse=True)
-            print(f"Sorted recipes by score")
+            print("Sorted recipes by score")
         except Exception as e:
             print(f"Error sorting recipes: {str(e)}")
             # Continue without sorting if there's an error
 
         try:
             response = RecommendationsResponse(status="ready", recipes=recipes)
-            print(f"Successfully created RecommendationsResponse with {len(recipes)} recipes")
+            print(
+                f"Successfully created RecommendationsResponse with {len(recipes)} recipes"
+            )
             return response.model_dump()
         except Exception as e:
             print(f"Error creating response model: {str(e)}")
-            raise HTTPException(status_code=500, detail=f"Error creating response: {str(e)}")
+            raise HTTPException(
+                status_code=500, detail=f"Error creating response: {str(e)}"
+            )
 
     except HTTPException:
         # Re-raise HTTP exceptions as-is
         raise
     except Exception as e:
-        print(f"Unexpected error in get_user_recommendations for user {user_id}: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Error fetching recommendations: {str(e)}")
+        print(
+            f"Unexpected error in get_user_recommendations for user {user_id}: {str(e)}"
+        )
+        raise HTTPException(
+            status_code=500, detail=f"Error fetching recommendations: {str(e)}"
+        )
 
 
 @router.delete("/{user_id}")
 async def delete_user_recommendations(user_id: str):
     """Delete all recommendations for a user"""
     try:
-        supabase.table('user_recommendations').delete().eq('user_id', user_id).execute()
+        supabase.table("user_recommendations").delete().eq("user_id", user_id).execute()
         return {"message": "Recommendations deleted successfully"}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error deleting recommendations: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error deleting recommendations: {str(e)}"
+        )

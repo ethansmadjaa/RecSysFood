@@ -4,7 +4,7 @@ from pydantic import BaseModel, field_validator
 from typing import List, Optional
 import pandas as pd
 import ast
-
+from models.database import User
 from filtre_recommandation import UserPreferencesInput, select_recipes_from_preferences
 from utils.recipes_loader import fetch_all_recipes
 
@@ -98,8 +98,6 @@ class RecommendationsResponse(BaseModel):
     recipes: List[RecipeResponse]
 
 
-
-
 def generate_recommendations_task(user_id: str):
     """Background task to generate recommendations for a user"""
     try:
@@ -161,22 +159,41 @@ def generate_recommendations_task(user_id: str):
         print(f"Error generating recommendations for user {user_id}: {str(e)}")
 
 
+def update_user_has_recommandations(user_id: str):
+    """Update user has_recommandations to True"""
+    try:
+        supabase.table("users").update({"has_recommandations": True}).eq(
+            "id", user_id
+        ).execute()
+        return {"message": "User has_recommandations updated to True"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error updating user has_recommandations: {str(e)}")
+
+
 @router.post("/{user_id}/generate")
 async def trigger_generate_recommendations(
     user_id: str, background_tasks: BackgroundTasks
 ):
     """Trigger recommendation generation in background"""
     # Verify user exists
-    user_response = (
-        supabase.table("users").select("id").eq("id", user_id).single().execute()
+    user_response: User = (
+        supabase.table("users")
+        .select("id, has_recommandations")
+        .eq("id", user_id)
+        .single()
+        .execute()
     )
-    if not user_response.data:
+    if not user_response.id:
         raise HTTPException(status_code=404, detail="User not found")
+
+    if user_response.has_recommandations:
+        raise HTTPException(status_code=400, detail="Recommendations already generated")
 
     # Add task to background
     background_tasks.add_task(generate_recommendations_task, user_id)
-
+    background_tasks.add_task(update_user_has_recommandations, user_id)
     return {"status": "generating", "message": "Recommendation generation started"}
+
 
 @router.get("/{user_id}", response_model=RecommendationsResponse)
 async def get_user_recommendations(user_id: str):
@@ -200,10 +217,7 @@ async def get_user_recommendations(user_id: str):
 
         # Fetch recipe details
         recipes_response = (
-            supabase.table("recipes")
-            .select("*")
-            .in_("recipeid", recipe_ids)
-            .execute()
+            supabase.table("recipes").select("*").in_("recipeid", recipe_ids).execute()
         )
 
         if not recipes_response.data:
@@ -233,6 +247,7 @@ async def get_user_recommendations(user_id: str):
         raise HTTPException(
             status_code=500, detail=f"Error fetching recommendations: {str(e)}"
         )
+
 
 @router.delete("/{user_id}")
 async def delete_user_recommendations(user_id: str):

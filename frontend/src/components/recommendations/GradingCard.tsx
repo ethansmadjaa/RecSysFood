@@ -125,7 +125,7 @@ export function GradingCard({
           className="absolute inset-0 bg-red-500/20 z-10 pointer-events-none flex items-center justify-center"
           style={{ opacity: dislikeOpacity }}
         >
-          <div className="bg-red-500 text-white px-6 py-3 rounded-xl rotate-[15deg] border-4 border-red-600 shadow-lg">
+          <div className="bg-red-500 text-white px-6 py-3 rounded-xl rotate-15 border-4 border-red-600 shadow-lg">
             <div className="flex items-center gap-2">
               <ThumbsDown className="h-8 w-8" />
               <span className="text-2xl font-bold">NOPE</span>

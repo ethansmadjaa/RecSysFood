@@ -22,10 +22,11 @@ import {
 } from '@/components/ui/dialog'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Heart, ChefHat, Clock, Star, Loader2, Flame, Drumstick, Leaf, RefreshCw, Users, Calendar, AlertTriangle, Utensils, Timer } from 'lucide-react'
+import { Heart, ChefHat, Clock, Star, Loader2, Flame, Drumstick, Leaf, RefreshCw, Users, Calendar, AlertTriangle, Utensils, Timer, ThumbsDown, ThumbsUp, Meh } from 'lucide-react'
 import { getUserRecommendations, triggerRecommendations, type Recipe, type RecommendationsResponse } from '@/lib/api/recommendations'
 import { getUserProfile } from '@/lib/api/auth'
 import { getUserFavoriteIds, toggleFavorite } from '@/lib/api/favorites'
+import { createInteraction, completeGrading, getUserInteractions } from '@/lib/api/interactions'
 import { toast } from 'sonner'
 
 export function Recommendations() {
@@ -38,6 +39,14 @@ export function Recommendations() {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [favoriteIds, setFavoriteIds] = useState<Set<number>>(new Set())
   const [userProfileId, setUserProfileId] = useState<string | null>(null)
+
+  // Grading state
+  const [currentRecipeIndex, setCurrentRecipeIndex] = useState(0)
+  const [isGrading, setIsGrading] = useState(true)
+  const [gradingComplete, setGradingComplete] = useState(false)
+  const [submittingRating, setSubmittingRating] = useState(false)
+  const [swipeDirection, setSwipeDirection] = useState<'left' | 'right' | 'down' | null>(null)
+  const [recipesToGrade, setRecipesToGrade] = useState<Recipe[]>([])
 
   const fetchFavorites = async (profileId: string) => {
     const { data } = await getUserFavoriteIds(profileId)
@@ -55,8 +64,12 @@ export function Recommendations() {
 
       setUserProfileId(userProfile.id)
 
-      // Fetch favorites in parallel
+      // Fetch favorites and interactions in parallel
       fetchFavorites(userProfile.id)
+      const { data: interactions } = await getUserInteractions(userProfile.id)
+
+      // Get already graded recipe IDs
+      const gradedIds = new Set<number>(interactions?.map(i => i.recipe_id) || [])
 
       const { data } = await getUserRecommendations(userProfile.id)
 
@@ -66,6 +79,17 @@ export function Recommendations() {
         setStatus(data.status)
         if (data.status === 'ready' && data.recipes.length > 0) {
           setRecommendations(data.recipes)
+
+          // Filter out already graded recipes
+          const ungraded = data.recipes.filter(r => !gradedIds.has(r.recipeid))
+          setRecipesToGrade(ungraded)
+
+          // If all recipes are already graded, skip grading mode
+          if (ungraded.length === 0) {
+            setIsGrading(false)
+            setGradingComplete(true)
+          }
+
           setLoading(false)
           setRefreshing(false)
           return true
@@ -117,6 +141,53 @@ export function Recommendations() {
     } else {
       toast.success(isFav ? 'Retire des favoris' : 'Ajoute aux favoris')
     }
+  }
+
+  const handleRating = async (rating: 0 | 1 | 2) => {
+    if (!userProfileId || currentRecipeIndex >= recipesToGrade.length || submittingRating) return
+
+    const currentRecipe = recipesToGrade[currentRecipeIndex]
+    setSubmittingRating(true)
+
+    // Set swipe direction based on rating
+    const direction = rating === 2 ? 'right' : rating === 0 ? 'left' : 'down'
+    setSwipeDirection(direction)
+
+    const { error } = await createInteraction({
+      user_id: userProfileId,
+      recipe_id: currentRecipe.recipeid,
+      rating,
+    })
+
+    if (error) {
+      toast.error('Erreur lors de l\'envoi de la note')
+      setSubmittingRating(false)
+      setSwipeDirection(null)
+      return
+    }
+
+    // Wait for animation to complete before moving to next
+    setTimeout(() => {
+      setSwipeDirection(null)
+      const nextIndex = currentRecipeIndex + 1
+      setCurrentRecipeIndex(nextIndex)
+      setSubmittingRating(false)
+
+      // Check if all recipes have been graded
+      if (nextIndex >= recipesToGrade.length) {
+        setGradingComplete(true)
+        setIsGrading(false)
+
+        // Update has_graded in the database
+        completeGrading(userProfileId).then(({ error: gradingError }) => {
+          if (gradingError) {
+            toast.error('Erreur lors de la finalisation')
+          } else {
+            toast.success('Merci pour tes notes ! Tes recommandations vont s\'ameliorer.')
+          }
+        })
+      }
+    }, 300)
   }
 
   useEffect(() => {
@@ -178,7 +249,7 @@ export function Recommendations() {
     'photo-1565299624946-b28f40a0ae38', // pizza
     'photo-1540189549336-e6e99c3679fe', // food platter
     'photo-1565958011703-44f9829ba187', // dessert
-    'photo-1482049016gy-7db4v34g7e', // pasta
+    'photo-1621996346565-e3dbc646d9a9', // pasta
     'photo-1504674900247-0877df9cc836', // grilled food
     'photo-1512621776951-a57141f2eefd', // healthy bowl
     'photo-1473093295043-cdd812d0e601', // pasta dish
@@ -546,56 +617,56 @@ export function Recommendations() {
 
               <TabsContent value="nutrition" className="mt-4">
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                  {recipe.calories && (
+                  {recipe.calories != null && recipe.calories > 0 && (
                     <div className="p-3 bg-muted rounded-lg text-center">
                       <Flame className="h-5 w-5 mx-auto text-orange-500" />
                       <p className="text-lg font-bold mt-1">{Math.round(recipe.calories)}</p>
                       <p className="text-xs text-muted-foreground">Calories</p>
                     </div>
                   )}
-                  {recipe.proteincontent && (
+                  {recipe.proteincontent != null && recipe.proteincontent > 0 && (
                     <div className="p-3 bg-muted rounded-lg text-center">
                       <Drumstick className="h-5 w-5 mx-auto text-red-500" />
                       <p className="text-lg font-bold mt-1">{Math.round(recipe.proteincontent)}g</p>
                       <p className="text-xs text-muted-foreground">Proteines</p>
                     </div>
                   )}
-                  {recipe.carbohydratecontent && (
+                  {recipe.carbohydratecontent != null && recipe.carbohydratecontent > 0 && (
                     <div className="p-3 bg-muted rounded-lg text-center">
                       <div className="h-5 w-5 mx-auto text-yellow-500 font-bold text-sm">C</div>
                       <p className="text-lg font-bold mt-1">{Math.round(recipe.carbohydratecontent)}g</p>
                       <p className="text-xs text-muted-foreground">Glucides</p>
                     </div>
                   )}
-                  {recipe.fatcontent && (
+                  {recipe.fatcontent != null && recipe.fatcontent > 0 && (
                     <div className="p-3 bg-muted rounded-lg text-center">
                       <div className="h-5 w-5 mx-auto text-blue-500 font-bold text-sm">F</div>
                       <p className="text-lg font-bold mt-1">{Math.round(recipe.fatcontent)}g</p>
                       <p className="text-xs text-muted-foreground">Lipides</p>
                     </div>
                   )}
-                  {recipe.fibercontent && (
+                  {recipe.fibercontent != null && recipe.fibercontent > 0 && (
                     <div className="p-3 bg-muted rounded-lg text-center">
                       <Leaf className="h-5 w-5 mx-auto text-green-500" />
                       <p className="text-lg font-bold mt-1">{Math.round(recipe.fibercontent)}g</p>
                       <p className="text-xs text-muted-foreground">Fibres</p>
                     </div>
                   )}
-                  {recipe.sugarcontent && (
+                  {recipe.sugarcontent != null && recipe.sugarcontent > 0 && (
                     <div className="p-3 bg-muted rounded-lg text-center">
                       <div className="h-5 w-5 mx-auto text-pink-500 font-bold text-sm">S</div>
                       <p className="text-lg font-bold mt-1">{Math.round(recipe.sugarcontent)}g</p>
                       <p className="text-xs text-muted-foreground">Sucres</p>
                     </div>
                   )}
-                  {recipe.sodiumcontent && (
+                  {recipe.sodiumcontent != null && recipe.sodiumcontent > 0 && (
                     <div className="p-3 bg-muted rounded-lg text-center">
                       <div className="h-5 w-5 mx-auto text-gray-500 font-bold text-sm">Na</div>
                       <p className="text-lg font-bold mt-1">{Math.round(recipe.sodiumcontent)}mg</p>
                       <p className="text-xs text-muted-foreground">Sodium</p>
                     </div>
                   )}
-                  {recipe.cholesterolcontent && (
+                  {recipe.cholesterolcontent != null && recipe.cholesterolcontent > 0 && (
                     <div className="p-3 bg-muted rounded-lg text-center">
                       <div className="h-5 w-5 mx-auto text-purple-500 font-bold text-sm">Ch</div>
                       <p className="text-lg font-bold mt-1">{Math.round(recipe.cholesterolcontent)}mg</p>
@@ -632,6 +703,201 @@ export function Recommendations() {
       </DialogContent>
     )
   }
+
+  const GradingCard = ({ recipe }: { recipe: Recipe }) => {
+    const originalImageUrl = recipe.images?.[0] || null
+    const fallbackImageUrl = getUnsplashFoodImage(recipe.recipeid)
+
+    // Animation classes based on swipe direction
+    const getSwipeAnimation = () => {
+      if (!swipeDirection) return ''
+      switch (swipeDirection) {
+        case 'right':
+          return 'translate-x-[150%] rotate-12 opacity-0'
+        case 'left':
+          return '-translate-x-[150%] -rotate-12 opacity-0'
+        case 'down':
+          return 'translate-y-[150%] opacity-0'
+        default:
+          return ''
+      }
+    }
+
+    return (
+      <div className="flex flex-col items-center justify-center w-full max-w-lg mx-auto">
+        {/* Progress indicator */}
+        <div className="w-full mb-4">
+          <div className="flex justify-between text-sm text-muted-foreground mb-2">
+            <span>Recette {currentRecipeIndex + 1} sur {recipesToGrade.length}</span>
+            <span>{Math.round(((currentRecipeIndex) / recipesToGrade.length) * 100)}%</span>
+          </div>
+          <div className="w-full bg-muted rounded-full h-2">
+            <div
+              className="bg-primary h-2 rounded-full transition-all duration-300"
+              style={{ width: `${(currentRecipeIndex / recipesToGrade.length) * 100}%` }}
+            />
+          </div>
+        </div>
+
+        {/* Recipe Card with animation */}
+        <Card className={`w-full overflow-hidden shadow-lg transition-all duration-300 ease-out ${getSwipeAnimation()}`}>
+          <div className="relative">
+            <AspectRatio ratio={4 / 3}>
+              <img
+                src={originalImageUrl || fallbackImageUrl}
+                alt={recipe.name}
+                className="h-full w-full object-cover"
+                onError={(e) => {
+                  (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=800&auto=format&fit=crop'
+                }}
+              />
+            </AspectRatio>
+            {recipe.recipecategory && (
+              <Badge variant="secondary" className="absolute left-3 bottom-3">
+                {recipe.recipecategory}
+              </Badge>
+            )}
+            {recipe.aggregatedrating && recipe.aggregatedrating >= 4.5 && (
+              <Badge className="absolute right-3 top-3 bg-yellow-500 text-yellow-950">
+                <Star className="mr-1 h-3 w-3 fill-current" />
+                Top note
+              </Badge>
+            )}
+          </div>
+
+          <CardHeader className="pb-3">
+            <CardTitle className="text-xl line-clamp-2">{recipe.name}</CardTitle>
+            {recipe.description && (
+              <p className="text-sm text-muted-foreground line-clamp-2 mt-1">{recipe.description}</p>
+            )}
+            <CardDescription className="flex flex-wrap items-center gap-3 text-sm mt-2">
+              {recipe.totaltime_min && (
+                <span className="flex items-center gap-1">
+                  <Clock className="h-4 w-4" />
+                  {recipe.totaltime_min} min
+                </span>
+              )}
+              {recipe.aggregatedrating && (
+                <span className="flex items-center gap-1">
+                  <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
+                  {recipe.aggregatedrating.toFixed(1)}
+                </span>
+              )}
+              {recipe.recipeservings && (
+                <span className="flex items-center gap-1">
+                  <Users className="h-4 w-4" />
+                  {recipe.recipeservings} pers.
+                </span>
+              )}
+            </CardDescription>
+          </CardHeader>
+
+          <CardContent className="pb-3">
+            <div className="flex flex-wrap gap-2">
+              {recipe.is_vegan && (
+                <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                  <Leaf className="mr-1 h-3 w-3" />
+                  Vegan
+                </Badge>
+              )}
+              {recipe.is_vegetarian && !recipe.is_vegan && (
+                <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                  <Leaf className="mr-1 h-3 w-3" />
+                  Vegetarien
+                </Badge>
+              )}
+              {recipe.calories && (
+                <Badge variant="outline">
+                  <Flame className="mr-1 h-3 w-3" />
+                  {Math.round(recipe.calories)} cal
+                </Badge>
+              )}
+              {recipe.proteincontent && recipe.proteincontent > 20 && (
+                <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+                  <Drumstick className="mr-1 h-3 w-3" />
+                  Riche en proteines
+                </Badge>
+              )}
+            </div>
+          </CardContent>
+
+          <CardFooter className="flex flex-col gap-4 pt-4 pb-6">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-muted-foreground"
+              onClick={() => openRecipeDetail(recipe)}
+            >
+              <Utensils className="h-4 w-4 mr-2" />
+              Voir les details
+            </Button>
+            <div className="flex justify-center gap-4">
+              <Button
+                variant="outline"
+                size="lg"
+                className="h-16 w-16 rounded-full border-2 border-red-300 hover:bg-red-50 hover:border-red-500 transition-all"
+                onClick={() => handleRating(0)}
+                disabled={submittingRating}
+              >
+                <ThumbsDown className="h-7 w-7 text-red-500" />
+              </Button>
+              <Button
+                variant="outline"
+                size="lg"
+                className="h-14 w-14 rounded-full border-2 border-gray-300 hover:bg-gray-50 hover:border-gray-500 transition-all"
+                onClick={() => handleRating(1)}
+                disabled={submittingRating}
+              >
+                <Meh className="h-6 w-6 text-gray-500" />
+              </Button>
+              <Button
+                variant="outline"
+                size="lg"
+                className="h-16 w-16 rounded-full border-2 border-green-300 hover:bg-green-50 hover:border-green-500 transition-all"
+                onClick={() => handleRating(2)}
+                disabled={submittingRating}
+              >
+                <ThumbsUp className="h-7 w-7 text-green-500" />
+              </Button>
+            </div>
+          </CardFooter>
+        </Card>
+
+        {/* Legend */}
+        <div className="flex justify-center gap-6 mt-4 text-sm text-muted-foreground">
+          <span className="flex items-center gap-1">
+            <ThumbsDown className="h-4 w-4 text-red-500" />
+            J'aime pas
+          </span>
+          <span className="flex items-center gap-1">
+            <Meh className="h-4 w-4 text-gray-500" />
+            Indifferent
+          </span>
+          <span className="flex items-center gap-1">
+            <ThumbsUp className="h-4 w-4 text-green-500" />
+            J'aime
+          </span>
+        </div>
+      </div>
+    )
+  }
+
+  const GradingComplete = () => (
+    <Card className="w-full max-w-lg mx-auto">
+      <CardContent className="flex flex-col items-center justify-center py-12">
+        <div className="rounded-full bg-green-100 p-4 mb-4">
+          <ThumbsUp className="h-12 w-12 text-green-600" />
+        </div>
+        <h2 className="text-2xl font-bold text-center">Merci pour tes notes !</h2>
+        <p className="text-muted-foreground text-center mt-2 max-w-md">
+          Tes preferences ont ete enregistrees. Nous allons ameliorer tes recommandations.
+        </p>
+        <Button className="mt-6" onClick={() => setIsGrading(false)}>
+          Voir toutes les recettes
+        </Button>
+      </CardContent>
+    </Card>
+  )
 
   const LoadingSkeleton = () => (
     <Card className="overflow-hidden">
@@ -675,24 +941,28 @@ export function Recommendations() {
             <div>
               <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
                 <ChefHat className="h-6 w-6 text-primary" />
-                Recommandations personnalisees
+                {isGrading && !gradingComplete ? 'Note ces recettes' : 'Recommandations personnalisees'}
               </h1>
               <p className="text-sm text-muted-foreground mt-1">
-                {recommendations.length > 0
-                  ? `${recommendations.length} recettes selectionnees selon tes preferences`
-                  : 'Basees sur tes preferences et objectifs alimentaires'
+                {isGrading && !gradingComplete
+                  ? 'Dis-nous ce que tu aimes pour ameliorer tes recommandations'
+                  : recommendations.length > 0
+                    ? `${recommendations.length} recettes selectionnees selon tes preferences`
+                    : 'Basees sur tes preferences et objectifs alimentaires'
                 }
               </p>
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleRefresh}
-              disabled={refreshing || loading}
-            >
-              <RefreshCw className={`h-4 w-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
-              Rafraichir
-            </Button>
+            {!isGrading && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleRefresh}
+                disabled={refreshing || loading}
+              >
+                <RefreshCw className={`h-4 w-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
+                Rafraichir
+              </Button>
+            )}
           </div>
 
           {/* Loading state - generating */}
@@ -720,8 +990,18 @@ export function Recommendations() {
             </div>
           )}
 
-          {/* Recipes grid */}
-          {!loading && !refreshing && recommendations.length > 0 && (
+          {/* Grading mode - Tinder style */}
+          {!loading && !refreshing && recipesToGrade.length > 0 && isGrading && !gradingComplete && currentRecipeIndex < recipesToGrade.length && (
+            <GradingCard recipe={recipesToGrade[currentRecipeIndex]} />
+          )}
+
+          {/* Grading complete */}
+          {!loading && !refreshing && gradingComplete && (
+            <GradingComplete />
+          )}
+
+          {/* Recipes grid - after grading is complete */}
+          {!loading && !refreshing && recommendations.length > 0 && !isGrading && (
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {recommendations.map((recipe) => (
                 <RecipeCard key={recipe.recipeid} recipe={recipe} />

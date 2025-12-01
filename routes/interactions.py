@@ -21,29 +21,30 @@ class InteractionResponse(BaseModel):
 
 
 @router.post("/", response_model=InteractionResponse)
-async def create_interaction(interaction: InteractionRequest) -> InteractionResponse:
+async def create_interaction(interaction: InteractionRequest):
     try:
-        interaction_response: Interaction = supabase.table("interactions").insert({
+        response = supabase.table("interactions").insert({
             "user_id": interaction.user_id,
             "recipe_id": interaction.recipe_id,
             "rating": interaction.rating
         }).execute()
-        if not interaction_response.data:
+        if not response.data:
             raise HTTPException(status_code=400, detail="Failed to create interaction")
-        return InteractionResponse(**interaction_response.data[0])
+        return InteractionResponse.model_validate(response.data[0])
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error creating interaction: {str(e)}")
 
 
 @router.get("/{user_id}", response_model=List[InteractionResponse])
-async def get_interactions(user_id: str) -> list[InteractionResponse]:
+async def get_interactions(user_id: str):
     try:
-        interactions_response = supabase.table("interactions").select("*").eq("user_id", user_id).execute()
+        response = supabase.table("interactions").select("*").eq("user_id", user_id).execute()
+        interactions: list[Interaction] = [Interaction.model_validate(interaction) for interaction in response.data]
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error getting interactions: {str(e)}")
-    if not interactions_response.data:
+    if not interactions:
         raise HTTPException(status_code=404, detail="No interactions found")
-    return [InteractionResponse(**interaction) for interaction in interactions_response.data]
+    return [InteractionResponse.model_validate(interaction) for interaction in interactions]
 
 
 @router.patch("/{user_id}/complete-grading")

@@ -4,8 +4,6 @@ from lib import supabase
 from models.database import Recipe
 from utils.logger import logger
 
-# Cache file path
-CACHE_FILE = Path(__file__).parent.parent / "data" / "recipes_cache.json"
 
 def get_recipe(id: int) -> Recipe:
     logger.info(f"Fetching recipe with id {id}")
@@ -17,5 +15,5 @@ def get_recipe(id: int) -> Recipe:
 def create_recipe(recipe: Recipe) -> Recipe:
     logger.info(f"Creating new recipe: {recipe.name}")
     response = supabase.table("recipes").insert(recipe.model_dump()).execute()
-    logger.info(f"Successfully created recipe with id {response.data[0]['recipeid']}")
+    logger.info(f"Successfully created recipe with id {response.data[0]}")
     return Recipe.model_validate(response.data[0])

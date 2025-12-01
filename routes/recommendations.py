@@ -5,7 +5,7 @@ from typing import List, Optional
 import pandas as pd
 import ast
 from models.database import User
-from filtre_recommandation import UserPreferencesInput, select_recipes_from_preferences
+from utils.filtre_recommandation import UserPreferencesInput, select_recipes_from_preferences
 from utils.recipes_loader import fetch_all_recipes
 
 router = APIRouter(prefix="/api/recommendations", tags=["recommendations"])
@@ -141,7 +141,7 @@ def generate_recommendations_task(user_id: str):
         selected_recipes = select_recipes_from_preferences(recipes_df, prefs)
 
         # 5. Clear old recommendations for this user
-        supabase.table("user_recommendations").delete().eq("user_id", user_id).execute()
+        supabase.table("user_recommendations").delete().eq("user_id", user_id).eq("type", "filter").execute()
 
         # 6. Insert new recommendations
         for _, recipe in selected_recipes.iterrows():
@@ -150,14 +150,13 @@ def generate_recommendations_task(user_id: str):
                 "recipe_id": int(recipe["recipeid"]),
                 "score": float(recipe.get("score_total", 0)),
                 "is_active": True,
+                "type": "filter"
             }
             supabase.table("user_recommendations").insert(recommendation_data).execute()
-
         print(f"Generated {len(selected_recipes)} recommendations for user {user_id}")
-
     except Exception as e:
         print(f"Error generating recommendations for user {user_id}: {str(e)}")
-
+        raise HTTPException(status_code=500, detail=f"Error generating recommendations: {str(e)}")
 
 def update_user_has_recommandations(user_id: str):
     """Update user has_recommandations to True"""
@@ -205,6 +204,7 @@ async def get_user_recommendations(user_id: str):
             .select("recipe_id, score")
             .eq("user_id", user_id)
             .eq("is_active", True)
+            .eq("type", "filter")
             .execute()
         )
 
@@ -253,7 +253,7 @@ async def get_user_recommendations(user_id: str):
 async def delete_user_recommendations(user_id: str):
     """Delete all recommendations for a user"""
     try:
-        supabase.table("user_recommendations").delete().eq("user_id", user_id).execute()
+        supabase.table("user_recommendations").delete().eq("user_id", user_id).eq("type", "filter").execute()
         return {"message": "Recommendations deleted successfully"}
     except Exception as e:
         raise HTTPException(

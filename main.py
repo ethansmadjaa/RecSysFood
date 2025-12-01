@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from routes import auth, preferences, recommendations, interactions
+from utils.recsys_scheduler import initialize_model_if_needed, start_scheduler, stop_scheduler
 import uvicorn
 import asyncio
 import httpx
@@ -30,8 +31,16 @@ async def send_keep_alive():
 async def lifespan(app: FastAPI):
     # Startup: create keep-alive task
     task = asyncio.create_task(send_keep_alive())
+
+    # Initialize GraphSAGE model and start hourly training scheduler
+    print("Initializing recommendation model...")
+    initialize_model_if_needed()
+    start_scheduler()
+
     yield
-    # Shutdown: cancel keep-alive task
+
+    # Shutdown: stop scheduler and cancel keep-alive task
+    stop_scheduler()
     task.cancel()
     try:
         await task

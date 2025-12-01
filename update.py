@@ -26,7 +26,11 @@ def convert_python_list_to_postgres_array(value):
 
 
 print("Loading recipes.csv...")
-df = pd.read_csv("utils/recipes.csv", sep=",", encoding="utf-8")
+df = pd.read_csv(
+    file_path="https://lvotwwcviiizjbfqxbsn.supabase.co/storage/v1/object/public/friends/recipes.csv",
+    sep=",",
+    encoding="utf-8",
+)
 df.columns = df.columns.str.lower()
 print(f"Loaded {len(df)} recipes")
 columns_to_update = [
@@ -49,7 +53,7 @@ df.to_csv("utils/recipes.csv", index=False)
 
 # Process in batches for better performance
 BATCH_SIZE = 1000
-SKIP_FIRST = 70000
+SKIP_FIRST = 186000
 total_rows = len(new_df)
 
 print(f"Skipping first {SKIP_FIRST} recipes, starting from recipe {SKIP_FIRST + 1}")

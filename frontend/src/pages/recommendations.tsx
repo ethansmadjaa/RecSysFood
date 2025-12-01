@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react'
+import { motion, useMotionValue, useTransform, AnimatePresence, animate } from 'framer-motion'
+import type { PanInfo } from 'framer-motion'
 import { useAuth } from '@/hooks/useAuth'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card'
 import { SidebarProvider, SidebarInset, SidebarTrigger } from '@/components/ui/sidebar'
@@ -704,49 +706,131 @@ export function Recommendations() {
     )
   }
 
-  const GradingCard = ({ recipe }: { recipe: Recipe }) => {
+  const GradingCard = ({ recipe, onRate }: { recipe: Recipe; onRate: (rating: 0 | 1 | 2) => void }) => {
     const originalImageUrl = recipe.images?.[0] || null
     const fallbackImageUrl = getUnsplashFoodImage(recipe.recipeid)
 
-    // Animation classes based on swipe direction
-    const getSwipeAnimation = () => {
-      if (!swipeDirection) return ''
-      switch (swipeDirection) {
-        case 'right':
-          return 'translate-x-[150%] rotate-12 opacity-0'
-        case 'left':
-          return '-translate-x-[150%] -rotate-12 opacity-0'
-        case 'down':
-          return 'translate-y-[150%] opacity-0'
-        default:
-          return ''
+    // Motion values for drag
+    const x = useMotionValue(0)
+    const y = useMotionValue(0)
+
+    // Transform values based on drag position
+    const rotate = useTransform(x, [-300, 0, 300], [-25, 0, 25])
+    const likeOpacity = useTransform(x, [0, 100, 200], [0, 0.5, 1])
+    const dislikeOpacity = useTransform(x, [-200, -100, 0], [1, 0.5, 0])
+    const mehOpacity = useTransform(y, [0, 100, 200], [0, 0.5, 1])
+
+    // Scale effect while dragging
+    const scale = useTransform(
+      x,
+      [-300, -150, 0, 150, 300],
+      [0.95, 0.98, 1, 0.98, 0.95]
+    )
+
+    // Swipe threshold
+    const SWIPE_THRESHOLD = 120
+    const SWIPE_Y_THRESHOLD = 100
+
+    const handleDragEnd = (_: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
+      const xOffset = info.offset.x
+      const yOffset = info.offset.y
+      const xVelocity = info.velocity.x
+      const yVelocity = info.velocity.y
+
+      // Check for vertical swipe (meh) first
+      if (yOffset > SWIPE_Y_THRESHOLD || yVelocity > 500) {
+        onRate(1) // Meh
+      }
+      // Check for horizontal swipes
+      else if (xOffset > SWIPE_THRESHOLD || xVelocity > 500) {
+        onRate(2) // Like
+      } else if (xOffset < -SWIPE_THRESHOLD || xVelocity < -500) {
+        onRate(0) // Dislike
       }
     }
 
-    return (
-      <div className="flex flex-col items-center justify-center w-full max-w-lg mx-auto">
-        {/* Progress indicator */}
-        <div className="w-full mb-4">
-          <div className="flex justify-between text-sm text-muted-foreground mb-2">
-            <span>Recette {currentRecipeIndex + 1} sur {recipesToGrade.length}</span>
-            <span>{Math.round(((currentRecipeIndex) / recipesToGrade.length) * 100)}%</span>
-          </div>
-          <div className="w-full bg-muted rounded-full h-2">
-            <div
-              className="bg-primary h-2 rounded-full transition-all duration-300"
-              style={{ width: `${(currentRecipeIndex / recipesToGrade.length) * 100}%` }}
-            />
-          </div>
-        </div>
+    // Handle button click with animation
+    const handleButtonClick = (rating: 0 | 1 | 2) => {
+      const targetX = rating === 2 ? 500 : rating === 0 ? -500 : 0
+      const targetY = rating === 1 ? 400 : 0
 
-        {/* Recipe Card with animation */}
-        <Card className={`w-full overflow-hidden shadow-lg transition-all duration-300 ease-out ${getSwipeAnimation()}`}>
+      // Animate the card out
+      animate(x, targetX, { duration: 0.3, ease: 'easeOut' })
+      animate(y, targetY, { duration: 0.3, ease: 'easeOut' })
+
+      // Call onRate after animation starts
+      setTimeout(() => {
+        onRate(rating)
+      }, 250)
+    }
+
+    return (
+      <motion.div
+        className="w-full cursor-grab active:cursor-grabbing"
+        style={{ x, y, rotate, scale }}
+        drag
+        dragConstraints={{ left: 0, right: 0, top: 0, bottom: 0 }}
+        dragElastic={0.9}
+        onDragEnd={handleDragEnd}
+        whileDrag={{ cursor: 'grabbing' }}
+        initial={{ scale: 0.95, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        exit={{
+          x: swipeDirection === 'right' ? 500 : swipeDirection === 'left' ? -500 : 0,
+          y: swipeDirection === 'down' ? 500 : 0,
+          rotate: swipeDirection === 'right' ? 20 : swipeDirection === 'left' ? -20 : 0,
+          opacity: 0,
+          transition: { duration: 0.3, ease: 'easeOut' }
+        }}
+        transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+      >
+        <Card className="w-full overflow-hidden shadow-xl relative">
+          {/* Like overlay */}
+          <motion.div
+            className="absolute inset-0 bg-green-500/20 z-10 pointer-events-none flex items-center justify-center"
+            style={{ opacity: likeOpacity }}
+          >
+            <div className="bg-green-500 text-white px-6 py-3 rounded-xl rotate-[-15deg] border-4 border-green-600 shadow-lg">
+              <div className="flex items-center gap-2">
+                <ThumbsUp className="h-8 w-8" />
+                <span className="text-2xl font-bold">J'AIME</span>
+              </div>
+            </div>
+          </motion.div>
+
+          {/* Dislike overlay */}
+          <motion.div
+            className="absolute inset-0 bg-red-500/20 z-10 pointer-events-none flex items-center justify-center"
+            style={{ opacity: dislikeOpacity }}
+          >
+            <div className="bg-red-500 text-white px-6 py-3 rounded-xl rotate-15 border-4 border-red-600 shadow-lg">
+              <div className="flex items-center gap-2">
+                <ThumbsDown className="h-8 w-8" />
+                <span className="text-2xl font-bold">NOPE</span>
+              </div>
+            </div>
+          </motion.div>
+
+          {/* Meh overlay */}
+          <motion.div
+            className="absolute inset-0 bg-gray-500/20 z-10 pointer-events-none flex items-center justify-center"
+            style={{ opacity: mehOpacity }}
+          >
+            <div className="bg-gray-500 text-white px-6 py-3 rounded-xl border-4 border-gray-600 shadow-lg">
+              <div className="flex items-center gap-2">
+                <Meh className="h-8 w-8" />
+                <span className="text-2xl font-bold">BOF</span>
+              </div>
+            </div>
+          </motion.div>
+
           <div className="relative">
             <AspectRatio ratio={4 / 3}>
               <img
                 src={originalImageUrl || fallbackImageUrl}
                 alt={recipe.name}
                 className="h-full w-full object-cover"
+                draggable={false}
                 onError={(e) => {
                   (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=800&auto=format&fit=crop'
                 }}
@@ -825,78 +909,180 @@ export function Recommendations() {
             <Button
               variant="ghost"
               size="sm"
-              className="text-muted-foreground"
-              onClick={() => openRecipeDetail(recipe)}
+              className="text-muted-foreground hover:text-foreground"
+              onClick={(e) => {
+                e.stopPropagation()
+                openRecipeDetail(recipe)
+              }}
             >
               <Utensils className="h-4 w-4 mr-2" />
               Voir les details
             </Button>
-            <div className="flex justify-center gap-4">
-              <Button
-                variant="outline"
-                size="lg"
-                className="h-16 w-16 rounded-full border-2 border-red-300 hover:bg-red-50 hover:border-red-500 transition-all"
-                onClick={() => handleRating(0)}
+
+            {/* Swipe hint text */}
+            <p className="text-xs text-muted-foreground text-center">
+              Swipe la carte ou utilise les boutons
+            </p>
+
+            <div className="flex justify-center items-center gap-6">
+              {/* Dislike button */}
+              <motion.button
+                className="h-16 w-16 rounded-full border-3 border-red-400 bg-white flex items-center justify-center shadow-lg shadow-red-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                whileHover={{
+                  scale: 1.15,
+                  boxShadow: '0 10px 30px -10px rgba(239, 68, 68, 0.5)',
+                  borderColor: 'rgb(239, 68, 68)'
+                }}
+                whileTap={{ scale: 0.9 }}
+                onClick={() => handleButtonClick(0)}
                 disabled={submittingRating}
+                transition={{ type: 'spring', stiffness: 400, damping: 17 }}
               >
-                <ThumbsDown className="h-7 w-7 text-red-500" />
-              </Button>
-              <Button
-                variant="outline"
-                size="lg"
-                className="h-14 w-14 rounded-full border-2 border-gray-300 hover:bg-gray-50 hover:border-gray-500 transition-all"
-                onClick={() => handleRating(1)}
+                <motion.div
+                  whileHover={{ rotate: -15 }}
+                  transition={{ type: 'spring', stiffness: 300 }}
+                >
+                  <ThumbsDown className="h-7 w-7 text-red-500" />
+                </motion.div>
+              </motion.button>
+
+              {/* Meh button */}
+              <motion.button
+                className="h-14 w-14 rounded-full border-2 border-gray-300 bg-white flex items-center justify-center shadow-md shadow-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                whileHover={{
+                  scale: 1.1,
+                  boxShadow: '0 8px 25px -8px rgba(107, 114, 128, 0.4)',
+                  borderColor: 'rgb(107, 114, 128)'
+                }}
+                whileTap={{ scale: 0.9 }}
+                onClick={() => handleButtonClick(1)}
                 disabled={submittingRating}
+                transition={{ type: 'spring', stiffness: 400, damping: 17 }}
               >
                 <Meh className="h-6 w-6 text-gray-500" />
-              </Button>
-              <Button
-                variant="outline"
-                size="lg"
-                className="h-16 w-16 rounded-full border-2 border-green-300 hover:bg-green-50 hover:border-green-500 transition-all"
-                onClick={() => handleRating(2)}
+              </motion.button>
+
+              {/* Like button */}
+              <motion.button
+                className="h-16 w-16 rounded-full border-3 border-green-400 bg-white flex items-center justify-center shadow-lg shadow-green-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                whileHover={{
+                  scale: 1.15,
+                  boxShadow: '0 10px 30px -10px rgba(34, 197, 94, 0.5)',
+                  borderColor: 'rgb(34, 197, 94)'
+                }}
+                whileTap={{ scale: 0.9 }}
+                onClick={() => handleButtonClick(2)}
                 disabled={submittingRating}
+                transition={{ type: 'spring', stiffness: 400, damping: 17 }}
               >
-                <ThumbsUp className="h-7 w-7 text-green-500" />
-              </Button>
+                <motion.div
+                  whileHover={{ rotate: 15 }}
+                  transition={{ type: 'spring', stiffness: 300 }}
+                >
+                  <ThumbsUp className="h-7 w-7 text-green-500" />
+                </motion.div>
+              </motion.button>
             </div>
           </CardFooter>
         </Card>
+      </motion.div>
+    )
+  }
 
-        {/* Legend */}
-        <div className="flex justify-center gap-6 mt-4 text-sm text-muted-foreground">
-          <span className="flex items-center gap-1">
-            <ThumbsDown className="h-4 w-4 text-red-500" />
-            J'aime pas
-          </span>
-          <span className="flex items-center gap-1">
-            <Meh className="h-4 w-4 text-gray-500" />
-            Indifferent
-          </span>
-          <span className="flex items-center gap-1">
-            <ThumbsUp className="h-4 w-4 text-green-500" />
-            J'aime
-          </span>
+  // Wrapper component for the grading section with AnimatePresence
+  const GradingSection = () => {
+    const currentRecipe = recipesToGrade[currentRecipeIndex]
+    if (!currentRecipe) return null
+
+    return (
+      <div className="flex flex-col items-center justify-center w-full max-w-lg mx-auto">
+        {/* Progress indicator */}
+        <div className="w-full mb-4">
+          <div className="flex justify-between text-sm text-muted-foreground mb-2">
+            <span>Recette {currentRecipeIndex + 1} sur {recipesToGrade.length}</span>
+            <span>{Math.round(((currentRecipeIndex) / recipesToGrade.length) * 100)}%</span>
+          </div>
+          <div className="w-full bg-muted rounded-full h-2 overflow-hidden">
+            <motion.div
+              className="bg-primary h-2 rounded-full"
+              initial={{ width: 0 }}
+              animate={{ width: `${(currentRecipeIndex / recipesToGrade.length) * 100}%` }}
+              transition={{ duration: 0.3, ease: 'easeOut' }}
+            />
+          </div>
         </div>
+
+        {/* Card stack with AnimatePresence */}
+        <div className="relative w-full h-[600px]">
+          <AnimatePresence mode="wait">
+            <GradingCard
+              key={currentRecipe.recipeid}
+              recipe={currentRecipe}
+              onRate={handleRating}
+            />
+          </AnimatePresence>
+        </div>
+
       </div>
     )
   }
 
   const GradingComplete = () => (
-    <Card className="w-full max-w-lg mx-auto">
-      <CardContent className="flex flex-col items-center justify-center py-12">
-        <div className="rounded-full bg-green-100 p-4 mb-4">
-          <ThumbsUp className="h-12 w-12 text-green-600" />
-        </div>
-        <h2 className="text-2xl font-bold text-center">Merci pour tes notes !</h2>
-        <p className="text-muted-foreground text-center mt-2 max-w-md">
-          Tes preferences ont ete enregistrees. Nous allons ameliorer tes recommandations.
-        </p>
-        <Button className="mt-6" onClick={() => setIsGrading(false)}>
-          Voir toutes les recettes
-        </Button>
-      </CardContent>
-    </Card>
+    <motion.div
+      initial={{ scale: 0.8, opacity: 0 }}
+      animate={{ scale: 1, opacity: 1 }}
+      transition={{ type: 'spring', stiffness: 200, damping: 20 }}
+    >
+      <Card className="w-full max-w-lg mx-auto overflow-hidden">
+        <CardContent className="flex flex-col items-center justify-center py-12">
+          <motion.div
+            className="rounded-full bg-green-100 p-5 mb-6"
+            initial={{ scale: 0, rotate: -180 }}
+            animate={{ scale: 1, rotate: 0 }}
+            transition={{ type: 'spring', stiffness: 200, damping: 15, delay: 0.2 }}
+          >
+            <motion.div
+              animate={{
+                scale: [1, 1.2, 1],
+              }}
+              transition={{ repeat: 2, duration: 0.4, delay: 0.5 }}
+            >
+              <ThumbsUp className="h-14 w-14 text-green-600" />
+            </motion.div>
+          </motion.div>
+          <motion.h2
+            className="text-2xl font-bold text-center"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.4 }}
+          >
+            Merci pour tes notes !
+          </motion.h2>
+          <motion.p
+            className="text-muted-foreground text-center mt-2 max-w-md"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.5 }}
+          >
+            Tes preferences ont ete enregistrees. Nous allons ameliorer tes recommandations.
+          </motion.p>
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.6 }}
+          >
+            <motion.div
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+            >
+              <Button className="mt-6" size="lg" onClick={() => setIsGrading(false)}>
+                Voir toutes les recettes
+              </Button>
+            </motion.div>
+          </motion.div>
+        </CardContent>
+      </Card>
+    </motion.div>
   )
 
   const LoadingSkeleton = () => (
@@ -992,7 +1178,7 @@ export function Recommendations() {
 
           {/* Grading mode - Tinder style */}
           {!loading && !refreshing && recipesToGrade.length > 0 && isGrading && !gradingComplete && currentRecipeIndex < recipesToGrade.length && (
-            <GradingCard recipe={recipesToGrade[currentRecipeIndex]} />
+            <GradingSection />
           )}
 
           {/* Grading complete */}

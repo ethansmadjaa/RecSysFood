@@ -50,6 +50,8 @@ class User(BaseModel):
     has_completed_signup: Optional[bool] = False
     created_at: datetime
     updated_at: datetime
+    has_recommandations: Optional[bool] = False
+    has_graded: Optional[bool] = False
 
     model_config = {"from_attributes": True}
 

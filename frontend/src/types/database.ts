@@ -29,6 +29,8 @@ export interface User {
   has_completed_signup: boolean | null;
   created_at: string;
   updated_at: string;
+  has_recommandations: boolean;
+  has_graded: boolean;
 }
 
 export interface UserPreferences {
@@ -102,6 +104,8 @@ export type UserInsert = Omit<User, 'id' | 'created_at' | 'updated_at'> & {
   created_at?: string;
   updated_at?: string;
   has_completed_signup?: boolean | null;
+  has_recommandations?: boolean;
+  has_graded?: boolean;
 };
 
 export type UserPreferencesInsert = Omit<UserPreferences, 'user_preferences_id' | 'created_at' | 'updated_at'> & {

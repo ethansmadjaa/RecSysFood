@@ -10,7 +10,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 # Keep-alive configuration
-KEEP_ALIVE_INTERVAL = 600  # 10 minutes in seconds
+KEEP_ALIVE_INTERVAL = 60  # 1 minute in seconds
 KEEP_ALIVE_URL = "http://localhost:8000/keep-alive"
 
 

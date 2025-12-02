@@ -17,7 +17,8 @@ export function GradingComplete({ onViewRecipes }: GradingCompleteProps) {
       <Card className="w-full max-w-lg mx-auto overflow-hidden">
         <CardContent className="flex flex-col items-center justify-center py-12">
           <motion.div
-            className="rounded-full bg-green-100 p-5 mb-6"
+            className="rounded-full p-5 mb-6"
+            style={{ backgroundColor: '#dcfce7' }}
             initial={{ scale: 0, rotate: -180 }}
             animate={{ scale: 1, rotate: 0 }}
             transition={{ type: 'spring', stiffness: 200, damping: 15, delay: 0.2 }}

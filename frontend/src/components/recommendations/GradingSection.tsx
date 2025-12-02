@@ -36,7 +36,8 @@ export function GradingSection({
         </div>
         <div className="w-full bg-muted rounded-full h-2 overflow-hidden">
           <motion.div
-            className="bg-primary h-2 rounded-full"
+            className="h-2 rounded-full"
+            style={{ backgroundColor: '#3568F6' }}
             initial={{ width: 0 }}
             animate={{
               width: `${(currentRecipeIndex / recipesToGrade.length) * 100}%`,

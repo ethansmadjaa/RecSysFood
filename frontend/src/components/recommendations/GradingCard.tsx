@@ -109,8 +109,8 @@ export function GradingCard({
       <Card className="w-full overflow-hidden shadow-xl relative">
         {/* Like overlay */}
         <motion.div
-          className="absolute inset-0 bg-green-500/20 z-10 pointer-events-none flex items-center justify-center"
-          style={{ opacity: likeOpacity }}
+          className="absolute inset-0 z-10 pointer-events-none flex items-center justify-center"
+          style={{ opacity: likeOpacity, backgroundColor: 'rgba(34, 197, 94, 0.2)' }}
         >
           <div className="bg-green-500 text-white px-6 py-3 rounded-xl rotate-[-15deg] border-4 border-green-600 shadow-lg">
             <div className="flex items-center gap-2">
@@ -122,8 +122,8 @@ export function GradingCard({
 
         {/* Dislike overlay */}
         <motion.div
-          className="absolute inset-0 bg-red-500/20 z-10 pointer-events-none flex items-center justify-center"
-          style={{ opacity: dislikeOpacity }}
+          className="absolute inset-0 z-10 pointer-events-none flex items-center justify-center"
+          style={{ opacity: dislikeOpacity, backgroundColor: 'rgba(239, 68, 68, 0.2)' }}
         >
           <div className="bg-red-500 text-white px-6 py-3 rounded-xl rotate-15 border-4 border-red-600 shadow-lg">
             <div className="flex items-center gap-2">
@@ -135,8 +135,8 @@ export function GradingCard({
 
         {/* Meh overlay */}
         <motion.div
-          className="absolute inset-0 bg-gray-500/20 z-10 pointer-events-none flex items-center justify-center"
-          style={{ opacity: mehOpacity }}
+          className="absolute inset-0 z-10 pointer-events-none flex items-center justify-center"
+          style={{ opacity: mehOpacity, backgroundColor: 'rgba(107, 114, 128, 0.2)' }}
         >
           <div className="bg-gray-500 text-white px-6 py-3 rounded-xl border-4 border-gray-600 shadow-lg">
             <div className="flex items-center gap-2">

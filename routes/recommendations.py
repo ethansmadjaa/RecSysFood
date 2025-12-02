@@ -1,13 +1,13 @@
 from lib import supabase
-from fastapi import APIRouter, HTTPException, BackgroundTasks
+from fastapi import APIRouter, HTTPException, BackgroundTasks, Query
 from pydantic import BaseModel, field_validator
-from typing import List, Optional
+from typing import List, Literal, Optional
 import pandas as pd
 import ast
-from models.database import User
 from utils.filtre_recommandation import UserPreferencesInput, select_recipes_from_preferences
 from utils.recipes_loader import fetch_all_recipes
-
+from utils.Model_GraphSAGE import get_recommendations_for_user, model_exists
+from models.database import User
 router = APIRouter(prefix="/api/recommendations", tags=["recommendations"])
 
 
@@ -169,23 +169,63 @@ def update_user_has_recommandations(user_id: str):
         raise HTTPException(status_code=500, detail=f"Error updating user has_recommandations: {str(e)}")
 
 
+def generate_recsys_recommendations_task(user_id: str):
+    """Background task to generate GraphSAGE-based recommendations for a user.
+
+    This uses the pre-trained model for fast inference.
+    """
+    try:
+        print(f"Generating recsys recommendations for user {user_id}")
+
+        # Check if model exists
+        if not model_exists():
+            print("No trained model available. Skipping recsys generation.")
+            return
+
+        # Get recommendations from GraphSAGE model
+        recommendations = get_recommendations_for_user(user_id, top_k=15)
+
+        if not recommendations:
+            print(f"No recommendations generated for user {user_id}")
+            return
+
+        # Clear old recsys recommendations for this user
+        supabase.table("user_recommendations").delete().eq("user_id", user_id).eq("type", "recsys").execute()
+
+        # Insert new recommendations
+        for rec in recommendations:
+            recommendation_data = {
+                "user_id": user_id,
+                "recipe_id": rec["recipe_id"],
+                "score": rec["score"],
+                "is_active": True,
+                "type": "recsys"
+            }
+            supabase.table("user_recommendations").insert(recommendation_data).execute()
+
+        print(f"Generated {len(recommendations)} recsys recommendations for user {user_id}")
+
+    except Exception as e:
+        print(f"Error generating recsys recommendations for user {user_id}: {str(e)}")
+
+
 @router.post("/{user_id}/generate")
 async def trigger_generate_recommendations(
     user_id: str, background_tasks: BackgroundTasks
 ):
     """Trigger recommendation generation in background"""
     # Verify user exists
-    user_response: User = (
+    user_response = (
         supabase.table("users")
-        .select("id, has_recommandations")
+        .select("*")
         .eq("id", user_id)
-        .single()
+        .maybe_single()
         .execute()
     )
-    if not user_response.id:
+    if not user_response.data:
         raise HTTPException(status_code=404, detail="User not found")
-
-    if user_response.has_recommandations:
+    user = User.model_validate(user_response.data)
+    if user.has_recommandations:
         raise HTTPException(status_code=400, detail="Recommendations already generated")
 
     # Add task to background
@@ -195,8 +235,17 @@ async def trigger_generate_recommendations(
 
 
 @router.get("/{user_id}", response_model=RecommendationsResponse)
-async def get_user_recommendations(user_id: str):
-    """Get user's active recommendations with recipe details"""
+async def get_user_recommendations(
+    user_id: str,
+    type: Literal["filter", "recsys"] = Query(default="filter", description="Type of recommendations to fetch")
+):
+    """Get user's active recommendations with recipe details.
+
+    Args:
+        user_id: The user's UUID
+        type: 'filter' for preference-filtered recipes (for grading),
+              'recsys' for GraphSAGE personalized recommendations
+    """
     try:
         # Get active recommendations for user
         recs_response = (
@@ -204,7 +253,7 @@ async def get_user_recommendations(user_id: str):
             .select("recipe_id, score")
             .eq("user_id", user_id)
             .eq("is_active", True)
-            .eq("type", "filter")
+            .eq("type", type)
             .execute()
         )
 
@@ -249,6 +298,108 @@ async def get_user_recommendations(user_id: str):
         )
 
 
+@router.post("/{user_id}/more-recipes")
+async def request_more_recipes_to_grade(
+    user_id: str, background_tasks: BackgroundTasks
+):
+    """Request 20 more recipes to grade for refining the model.
+
+    This generates new filter recommendations, excluding recipes the user has already rated.
+    """
+    try:
+        # Verify user exists
+        user_response = (
+            supabase.table("users")
+            .select("*")
+            .eq("id", user_id)
+            .maybe_single()
+            .execute()
+        )
+        if not user_response.data:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        # Get all recipe IDs the user has already rated
+        interactions_response = (
+            supabase.table("interactions")
+            .select("recipe_id")
+            .eq("user_id", user_id)
+            .execute()
+        )
+        already_rated_ids = set(
+            i["recipe_id"] for i in (interactions_response.data or [])
+        )
+
+        # Fetch user preferences
+        prefs_response = (
+            supabase.table("user_preferences")
+            .select("*")
+            .eq("user_id", user_id)
+            .single()
+            .execute()
+        )
+
+        if not prefs_response.data:
+            raise HTTPException(status_code=404, detail="User preferences not found")
+
+        prefs_data = prefs_response.data
+
+        # Create UserPreferencesInput
+        prefs = UserPreferencesInput(
+            meal_types=prefs_data.get("meal_types", []),
+            max_total_time=prefs_data.get("max_total_time"),
+            calorie_goal=prefs_data.get("calorie_goal", "medium"),
+            protein_goal=prefs_data.get("protein_goal", "medium"),
+            dietary_restrictions=prefs_data.get("dietary_restrictions", []),
+            allergy_nuts=prefs_data.get("allergy_nuts", False),
+            allergy_dairy=prefs_data.get("allergy_dairy", False),
+            allergy_egg=prefs_data.get("allergy_egg", False),
+            allergy_fish=prefs_data.get("allergy_fish", False),
+            allergy_soy=prefs_data.get("allergy_soy", False),
+        )
+
+        # Fetch all recipes
+        recipes_df = fetch_all_recipes()
+
+        if recipes_df.empty:
+            raise HTTPException(status_code=404, detail="No recipes found")
+
+        # Filter out already rated recipes
+        recipes_df = recipes_df[~recipes_df["recipeid"].isin(already_rated_ids)]
+
+        if recipes_df.empty:
+            raise HTTPException(status_code=404, detail="No new recipes available to grade")
+
+        # Generate recommendations (limited to 20)
+        selected_recipes = select_recipes_from_preferences(recipes_df, prefs, n_display=20)
+
+        # Clear old filter recommendations for this user
+        supabase.table("user_recommendations").delete().eq("user_id", user_id).eq("type", "filter").execute()
+
+        # Insert new recommendations
+        for _, recipe in selected_recipes.iterrows():
+            recommendation_data = {
+                "user_id": user_id,
+                "recipe_id": int(recipe["recipeid"]),
+                "score": float(recipe.get("score_total", 0)),
+                "is_active": True,
+                "type": "filter"
+            }
+            supabase.table("user_recommendations").insert(recommendation_data).execute()
+
+        return {
+            "status": "ready",
+            "message": f"Generated {len(selected_recipes)} new recipes to grade",
+            "count": len(selected_recipes)
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Error generating more recipes: {str(e)}"
+        )
+
+
 @router.delete("/{user_id}")
 async def delete_user_recommendations(user_id: str):
     """Delete all recommendations for a user"""
@@ -258,4 +409,39 @@ async def delete_user_recommendations(user_id: str):
     except Exception as e:
         raise HTTPException(
             status_code=500, detail=f"Error deleting recommendations: {str(e)}"
+        )
+
+
+@router.post("/{user_id}/regenerate-recsys")
+async def regenerate_recsys_recommendations(
+    user_id: str, background_tasks: BackgroundTasks
+):
+    """Regenerate GraphSAGE-based recommendations for a user.
+
+    This deletes existing recsys recommendations and generates new ones.
+    """
+    try:
+        # Verify user exists
+        user_response = (
+            supabase.table("users")
+            .select("*")
+            .eq("id", user_id)
+            .maybe_single()
+            .execute()
+        )
+        if not user_response.data:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        # Delete existing recsys recommendations
+        supabase.table("user_recommendations").delete().eq("user_id", user_id).eq("type", "recsys").execute()
+
+        # Add task to generate new recommendations in background
+        background_tasks.add_task(generate_recsys_recommendations_task, user_id)
+
+        return {"status": "generating", "message": "Recsys recommendation regeneration started"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Error regenerating recsys recommendations: {str(e)}"
         )

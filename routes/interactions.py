@@ -1,8 +1,12 @@
 from lib import supabase
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, BackgroundTasks
 from pydantic import BaseModel
-from typing import  List
+from typing import List
+from uuid import UUID
+from datetime import datetime
 from models.database import Interaction
+from routes.recommendations import generate_recsys_recommendations_task
+
 router = APIRouter(prefix="/api/interactions", tags=["interactions"])
 
 
@@ -14,10 +18,10 @@ class InteractionRequest(BaseModel):
 
 class InteractionResponse(BaseModel):
     interaction_id: int
-    user_id: str
+    user_id: UUID
     recipe_id: int
     rating: int
-    created_at: str
+    created_at: datetime
 
 
 @router.post("/", response_model=InteractionResponse)
@@ -44,14 +48,23 @@ async def get_interactions(user_id: str):
         raise HTTPException(status_code=500, detail=f"Error getting interactions: {str(e)}")
     if not interactions:
         raise HTTPException(status_code=404, detail="No interactions found")
-    return [InteractionResponse.model_validate(interaction) for interaction in interactions]
+    return [InteractionResponse.model_validate(interaction.model_dump()) for interaction in interactions]
 
 
 @router.patch("/{user_id}/complete-grading")
-async def complete_grading(user_id: str):
-    """Mark user as having completed grading all recommendations"""
+async def complete_grading(user_id: str, background_tasks: BackgroundTasks):
+    """Mark user as having completed grading and trigger recsys recommendations.
+
+    This endpoint:
+    1. Marks the user as having completed grading (has_graded = True)
+    2. Triggers GraphSAGE-based recommendation generation in background
+    """
     try:
         supabase.table("users").update({"has_graded": True}).eq("id", user_id).execute()
-        return {"message": "Grading completed successfully"}
+
+        # Trigger recsys recommendation generation in background
+        background_tasks.add_task(generate_recsys_recommendations_task, user_id)
+
+        return {"message": "Grading completed successfully. Generating personalized recommendations..."}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error completing grading: {str(e)}")

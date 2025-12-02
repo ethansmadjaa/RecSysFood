@@ -42,7 +42,7 @@ def fetch_training_data():
 
         user_preferences_df = pd.DataFrame(prefs_response.data)
 
-        recipes_df = pd.read_csv(file_path=os.getenv("CSV_PATH"))
+        recipes_df = pd.read_csv(os.getenv("CSV_PATH"))
 
         # Fetch interactions
         interactions_response = supabase.table("interactions").select(

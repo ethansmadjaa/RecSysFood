@@ -11,14 +11,14 @@ from typing import Optional
 import pandas as pd
 import networkx as nx
 import torch
-from torch_geometric.data import HeteroData
-import torch_geometric.transforms as T
+from torch_geometric.data import HeteroData  # type: ignore[import-untyped]
+import torch_geometric.transforms as T  # type: ignore[import-untyped]
 import torch.nn as nn
 import torch.optim as optim
-from torch_geometric.nn import SAGEConv, HeteroConv
-from torch_geometric.utils import negative_sampling
-from sklearn.metrics import roc_auc_score, average_precision_score
-from sklearn.preprocessing import LabelEncoder, StandardScaler
+from torch_geometric.nn import SAGEConv, HeteroConv  # type: ignore[import-untyped]
+from torch_geometric.utils import negative_sampling  # type: ignore[import-untyped]
+from sklearn.metrics import roc_auc_score, average_precision_score  # type: ignore[import-untyped]
+from sklearn.preprocessing import LabelEncoder, StandardScaler  # type: ignore[import-untyped]
 import numpy as np
 
 # Model save paths
@@ -131,7 +131,7 @@ def BuildGraph(user_preference_db: pd.DataFrame, recipe_db: pd.DataFrame, intera
     Returns:
         NetworkX graph with user and recipe nodes
     """
-    G = nx.Graph()
+    G: nx.Graph = nx.Graph()
 
     # Define users preference node
     for _, row in user_preference_db.iterrows():

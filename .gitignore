@@ -163,3 +163,5 @@ frontend/.env
 
 # Data
 data/
+
+models/trained

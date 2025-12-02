@@ -1,7 +1,7 @@
 from lib import supabase
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, EmailStr
-from typing import Optional
+from typing import Optional, Any, cast
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -44,13 +44,18 @@ async def sign_in(credentials: SignInRequest):
         )
 
         if response.user:
+            session_data = None
+            if response.session is not None:
+                session_data = (
+                    response.session.model_dump()
+                    if hasattr(response.session, "model_dump")
+                    else response.session.__dict__
+                )
             return AuthResponse(
                 user=response.user.model_dump()
                 if hasattr(response.user, "model_dump")
                 else response.user.__dict__,
-                session=response.session.model_dump()
-                if hasattr(response.session, "model_dump")
-                else response.session.__dict__,
+                session=session_data,
                 error=None,
             )
         else:
@@ -119,7 +124,8 @@ async def get_user_profile(auth_id: str):
         if not response.data:
             raise HTTPException(status_code=404, detail="User profile not found")
 
-        return UserProfileResponse(**response.data)
+        response_data = cast(dict[str, Any], response.data)
+        return UserProfileResponse(**response_data)
 
     except HTTPException:
         raise

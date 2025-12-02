@@ -1,7 +1,7 @@
 from lib import supabase
 from fastapi import APIRouter, HTTPException, BackgroundTasks, Query
 from pydantic import BaseModel, field_validator
-from typing import List, Literal, Optional
+from typing import List, Literal, Optional, Any, cast
 import pandas as pd
 import ast
 from utils.filtre_recommandation import UserPreferencesInput, select_recipes_from_preferences
@@ -114,7 +114,7 @@ def generate_recommendations_task(user_id: str):
             print(f"No preferences found for user {user_id}")
             return
 
-        prefs_data = prefs_response.data
+        prefs_data = cast(dict[str, Any], prefs_response.data)
 
         # 2. Create UserPreferencesInput from database data
         prefs = UserPreferencesInput(
@@ -145,7 +145,7 @@ def generate_recommendations_task(user_id: str):
 
         # 6. Insert new recommendations
         for _, recipe in selected_recipes.iterrows():
-            recommendation_data = {
+            recommendation_data: dict[str, Any] = {
                 "user_id": user_id,
                 "recipe_id": int(recipe["recipeid"]),
                 "score": float(recipe.get("score_total", 0)),
@@ -222,7 +222,7 @@ async def trigger_generate_recommendations(
         .maybe_single()
         .execute()
     )
-    if not user_response.data:
+    if user_response is None or not user_response.data:
         raise HTTPException(status_code=404, detail="User not found")
     user = User.model_validate(user_response.data)
     if user.has_recommandations:
@@ -261,8 +261,9 @@ async def get_user_recommendations(
             return RecommendationsResponse(status="not_found", recipes=[])
 
         # Get recipe IDs and scores
-        recipe_ids = [rec["recipe_id"] for rec in recs_response.data]
-        scores_map = {rec["recipe_id"]: rec["score"] for rec in recs_response.data}
+        recs_data = cast(list[dict[str, Any]], recs_response.data)
+        recipe_ids = [rec["recipe_id"] for rec in recs_data]
+        scores_map = {rec["recipe_id"]: rec["score"] for rec in recs_data}
 
         # Fetch recipe details
         recipes_response = (
@@ -273,8 +274,9 @@ async def get_user_recommendations(
             return RecommendationsResponse(status="not_found", recipes=[])
 
         # Build response with scores
+        recipes_data = cast(list[dict[str, Any]], recipes_response.data)
         recipes = []
-        for recipe in recipes_response.data:
+        for recipe in recipes_data:
             try:
                 # Add score to recipe data and pass as dict for validators to process
                 recipe_data = {**recipe, "score": scores_map.get(recipe["recipeid"])}
@@ -315,7 +317,7 @@ async def request_more_recipes_to_grade(
             .maybe_single()
             .execute()
         )
-        if not user_response.data:
+        if user_response is None or not user_response.data:
             raise HTTPException(status_code=404, detail="User not found")
 
         # Get all recipe IDs the user has already rated
@@ -325,8 +327,9 @@ async def request_more_recipes_to_grade(
             .eq("user_id", user_id)
             .execute()
         )
+        interactions_data = cast(list[dict[str, Any]], interactions_response.data or [])
         already_rated_ids = set(
-            i["recipe_id"] for i in (interactions_response.data or [])
+            i["recipe_id"] for i in interactions_data
         )
 
         # Fetch user preferences
@@ -341,7 +344,7 @@ async def request_more_recipes_to_grade(
         if not prefs_response.data:
             raise HTTPException(status_code=404, detail="User preferences not found")
 
-        prefs_data = prefs_response.data
+        prefs_data = cast(dict[str, Any], prefs_response.data)
 
         # Create UserPreferencesInput
         prefs = UserPreferencesInput(
@@ -377,7 +380,7 @@ async def request_more_recipes_to_grade(
 
         # Insert new recommendations
         for _, recipe in selected_recipes.iterrows():
-            recommendation_data = {
+            recommendation_data: dict[str, Any] = {
                 "user_id": user_id,
                 "recipe_id": int(recipe["recipeid"]),
                 "score": float(recipe.get("score_total", 0)),
@@ -429,7 +432,7 @@ async def regenerate_recsys_recommendations(
             .maybe_single()
             .execute()
         )
-        if not user_response.data:
+        if user_response is None or not user_response.data:
             raise HTTPException(status_code=404, detail="User not found")
 
         # Delete existing recsys recommendations

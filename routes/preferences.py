@@ -1,7 +1,7 @@
 from lib import supabase
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from typing import Optional, List
+from typing import Optional, List, Any, cast
 from enum import Enum
 
 router = APIRouter(prefix="/api/preferences", tags=["preferences"])
@@ -105,7 +105,8 @@ async def create_user_preferences(preferences: UserPreferencesRequest):
         if not response.data:
             raise HTTPException(status_code=400, detail="Failed to save preferences")
 
-        return UserPreferencesResponse(**response.data[0])
+        response_data = cast(list[dict[str, Any]], response.data)
+        return UserPreferencesResponse(**response_data[0])
 
     except HTTPException:
         raise
@@ -130,7 +131,8 @@ async def get_user_preferences(user_id: str):
         if not response.data:
             raise HTTPException(status_code=404, detail="User preferences not found")
 
-        return UserPreferencesResponse(**response.data)
+        response_data = cast(dict[str, Any], response.data)
+        return UserPreferencesResponse(**response_data)
 
     except HTTPException:
         raise

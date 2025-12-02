@@ -278,8 +278,7 @@ def select_recipes_from_preferences(
 
 
 if __name__ == "__main__":
-    recipes = fetch_all_recipes()       
-    df = pd.DataFrame([recipe.model_dump(mode="json") for recipe in recipes])
+    df = fetch_all_recipes()
 
     prefs = UserPreferencesInput(
         meal_types=["main_course", "dessert"],

@@ -81,7 +81,7 @@ for col in array_cols:
     df[col] = df[col].apply(r_vector_to_list)
 
 
-print(df.info())  # 1. Types de colonnes + non-null count
+df.info()  # 1. Types de colonnes + non-null count
 print(df.head(5))  # 2. Aperçu des 5 premières lignes
 print(df.dtypes)  # 3. Types pandas bruts
 print(df.apply(lambda x: type(x.iloc[0])))  # 4. Type Python de chaque cellule

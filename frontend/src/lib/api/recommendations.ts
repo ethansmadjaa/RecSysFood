@@ -74,13 +74,16 @@ export async function triggerRecommendations(userId: string): Promise<void> {
   }
 }
 
+export type RecommendationType = 'filter' | 'recsys'
+
 export async function getUserRecommendations(
-  userId: string
+  userId: string,
+  type: RecommendationType = 'filter'
 ): Promise<{ data: RecommendationsResponse | null; error: string | null }> {
   try {
     const { data: { session } } = await supabase.auth.getSession()
 
-    const response = await fetch(`${API_URL}/api/recommendations/${userId}`, {
+    const response = await fetch(`${API_URL}/api/recommendations/${userId}?type=${type}`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
@@ -97,5 +100,53 @@ export async function getUserRecommendations(
     return { data, error: null }
   } catch (error) {
     return { data: null, error: error instanceof Error ? error.message : 'Unknown error' }
+  }
+}
+
+export interface MoreRecipesResponse {
+  status: string
+  message: string
+  count: number
+}
+
+export async function requestMoreRecipesToGrade(
+  userId: string
+): Promise<{ data: MoreRecipesResponse | null; error: string | null }> {
+  try {
+    const { data: { session } } = await supabase.auth.getSession()
+
+    const response = await fetch(`${API_URL}/api/recommendations/${userId}/more-recipes`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` })
+      }
+    })
+
+    if (!response.ok) {
+      const errorData = await response.json()
+      return { data: null, error: errorData.detail || 'Failed to request more recipes' }
+    }
+
+    const data = await response.json()
+    return { data, error: null }
+  } catch (error) {
+    return { data: null, error: error instanceof Error ? error.message : 'Unknown error' }
+  }
+}
+
+export async function regenerateRecsysRecommendations(userId: string): Promise<void> {
+  try {
+    const { data: { session } } = await supabase.auth.getSession()
+
+    await fetch(`${API_URL}/api/recommendations/${userId}/regenerate-recsys`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` })
+      }
+    })
+  } catch (error) {
+    console.error('Failed to regenerate recsys recommendations:', error)
   }
 }

@@ -6,7 +6,7 @@ import pandas as pd
 import ast
 from utils.filtre_recommandation import UserPreferencesInput, select_recipes_from_preferences
 from utils.recipes_loader import fetch_all_recipes
-from utils.Model_GraphSAGE import get_recommendations_for_user, model_exists, user_exists_in_model
+from utils.content_based_model import get_recommendations_for_user, model_exists
 from utils.recsys_scheduler import train_and_save_model
 from models.database import User
 router = APIRouter(prefix="/api/recommendations", tags=["recommendations"])
@@ -79,6 +79,8 @@ class RecipeResponse(BaseModel):
     protein_category: Optional[str]
     # Recommendation score
     score: Optional[float]
+    # Recommendation reason
+    reason: Optional[str]
 
     # Validators to handle string representations of lists from the database
     @field_validator(
@@ -171,27 +173,59 @@ def update_user_has_recommandations(user_id: str):
 
 
 def generate_recsys_recommendations_task(user_id: str):
-    """Background task to generate GraphSAGE-based recommendations for a user.
+    """Background task to generate content-based recommendations for a user.
 
-    This uses the pre-trained model for fast inference. If the user is not found
-    in the model's graph, it will retrain the model first with the latest data.
+    This uses the pre-trained model for fast inference. If the model doesn't exist,
+    it will train the model first with the latest data.
     """
     try:
         print(f"Generating recsys recommendations for user {user_id}")
 
-        # Check if model exists and if user is in the model
-        if not model_exists() or not user_exists_in_model(user_id):
-            print(f"User {user_id} not found in model or model doesn't exist. Retraining model...")
+        # Check if model exists
+        if not model_exists():
+            print(f"Model doesn't exist. Training model...")
 
-            # Retrain the model with latest data (includes this user's interactions)
+            # Train the model with latest data
             training_success = train_and_save_model()
 
             if not training_success:
                 print(f"Model training failed for user {user_id}. Cannot generate recommendations.")
                 return
 
-        # Get recommendations from GraphSAGE model
-        recommendations = get_recommendations_for_user(user_id, top_k=15)
+        # Fetch user preferences
+        prefs_response = (
+            supabase.table("user_preferences")
+            .select("meal_types, calorie_goal, protein_goal")
+            .eq("user_id", user_id)
+            .maybe_single()
+            .execute()
+        )
+
+        user_prefs = {}
+        if prefs_response and prefs_response.data:
+            user_prefs = cast(dict[str, Any], prefs_response.data)
+
+        # Fetch user's liked recipes (rating > 0)
+        interactions_response = (
+            supabase.table("interactions")
+            .select("recipe_id")
+            .eq("user_id", user_id)
+            .gt("rating", 0)
+            .execute()
+        )
+
+        liked_recipe_ids = []
+        if interactions_response and interactions_response.data:
+            interactions_data = cast(list[dict[str, Any]], interactions_response.data)
+            liked_recipe_ids = [i["recipe_id"] for i in interactions_data]
+
+        # Get recommendations from content-based model
+        recommendations = get_recommendations_for_user(
+            user_id,
+            top_k=15,
+            user_prefs=user_prefs,
+            liked_recipe_ids=liked_recipe_ids
+        )
 
         if not recommendations:
             print(f"No recommendations generated for user {user_id}")
@@ -207,7 +241,8 @@ def generate_recsys_recommendations_task(user_id: str):
                 "recipe_id": rec["recipe_id"],
                 "score": rec["score"],
                 "is_active": True,
-                "type": "recsys"
+                "type": "recsys",
+                "reason": rec.get("reason")
             }
             supabase.table("user_recommendations").insert(recommendation_data).execute()
 
@@ -258,7 +293,7 @@ async def get_user_recommendations(
         # Get active recommendations for user
         recs_response = (
             supabase.table("user_recommendations")
-            .select("recipe_id, score")
+            .select("recipe_id, score, reason")
             .eq("user_id", user_id)
             .eq("is_active", True)
             .eq("type", type)
@@ -268,10 +303,11 @@ async def get_user_recommendations(
         if not recs_response.data:
             return RecommendationsResponse(status="not_found", recipes=[])
 
-        # Get recipe IDs and scores
+        # Get recipe IDs, scores, and reasons
         recs_data = cast(list[dict[str, Any]], recs_response.data)
         recipe_ids = [rec["recipe_id"] for rec in recs_data]
         scores_map = {rec["recipe_id"]: rec["score"] for rec in recs_data}
+        reasons_map = {rec["recipe_id"]: rec.get("reason") for rec in recs_data}
 
         # Fetch recipe details
         recipes_response = (
@@ -281,13 +317,17 @@ async def get_user_recommendations(
         if not recipes_response.data:
             return RecommendationsResponse(status="not_found", recipes=[])
 
-        # Build response with scores
+        # Build response with scores and reasons
         recipes_data = cast(list[dict[str, Any]], recipes_response.data)
         recipes = []
         for recipe in recipes_data:
             try:
-                # Add score to recipe data and pass as dict for validators to process
-                recipe_data = {**recipe, "score": scores_map.get(recipe["recipeid"])}
+                # Add score and reason to recipe data
+                recipe_data = {
+                    **recipe,
+                    "score": scores_map.get(recipe["recipeid"]),
+                    "reason": reasons_map.get(recipe["recipeid"])
+                }
                 recipe_obj = RecipeResponse.model_validate(recipe_data)
                 recipes.append(recipe_obj)
             except Exception:

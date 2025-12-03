@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router'
 import { useAuth } from '@/hooks/useAuth'
 import { SidebarProvider, SidebarInset, SidebarTrigger } from '@/components/ui/sidebar'
 import { AppSidebar } from '@/components/AppSidebar'
@@ -40,11 +41,13 @@ type RecsysPhase = 'loading' | 'generating' | 'ready'
 
 export function Recommendations() {
   const { user } = useAuth()
+  const [searchParams] = useSearchParams()
   const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [favoriteIds, setFavoriteIds] = useState<Set<number>>(new Set())
   const [userProfileId, setUserProfileId] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<string>('filter')
+  const initialTab = searchParams.get('tab') || 'filter'
+  const [activeTab, setActiveTab] = useState<string>(initialTab)
 
   // Filter tab state
   const [filterPhase, setFilterPhase] = useState<FilterPhase>('loading')

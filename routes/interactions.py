@@ -57,7 +57,7 @@ async def complete_grading(user_id: str, background_tasks: BackgroundTasks):
 
     This endpoint:
     1. Marks the user as having completed grading (has_graded = True)
-    2. Triggers GraphSAGE-based recommendation generation in background
+    2. Triggers content-based recommendation generation in background
     """
     try:
         supabase.table("users").update({"has_graded": True}).eq("id", user_id).execute()

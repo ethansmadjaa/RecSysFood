@@ -14,7 +14,7 @@ import schedule
 from dotenv import load_dotenv
 
 from lib import supabase
-from utils.Model_GraphSAGE import Train_GNN, save_model, model_exists
+from utils.content_based_model import Train_GNN, save_model, model_exists
 
 load_dotenv()
 
@@ -78,6 +78,7 @@ def train_and_save_model():
 
         # Fetch data
         training_data = fetch_training_data()
+        print("training_data fetched")
         if training_data is None:
             print("Could not fetch training data. Skipping training.")
             return False
@@ -88,17 +89,23 @@ def train_and_save_model():
         if len(interactions_df) < 10:
             print(f"Insufficient interactions ({len(interactions_df)}). Need at least 10 for training.")
             return False
+        else:
+            print("training_data fetched and checked successfully")
 
         # Train model
-        data, model, user_dict, recipe_dict, recipe_scaler = Train_GNN(
+        recipe_embeddings, model, recipe_id_to_idx, idx_to_recipe_id, data = Train_GNN(
             user_preferences_df,
             recipes_df,
             interactions_df,
-            epochs=15
+            epochs=50
         )
 
-        # Save model with scaler for consistent feature normalization
-        save_model(model, data, recipes_df, user_dict, recipe_dict, recipe_scaler)
+        if model is None:
+            print("Model training returned None. Skipping save.")
+            return False
+
+        # Save model
+        save_model(model, data, recipes_df, recipe_id_to_idx, idx_to_recipe_id)
 
         print(f"[{datetime.now().isoformat()}] Model training completed successfully")
         return True

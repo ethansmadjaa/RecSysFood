@@ -32,8 +32,8 @@ async def lifespan(app: FastAPI):
     # Startup: create keep-alive task
     task = asyncio.create_task(send_keep_alive())
 
-    # Initialize GraphSAGE model and start hourly training scheduler
-    print("Initializing recommendation model...")
+    # Initialize content-based model and start hourly training scheduler
+    print("Initializing content-based model...")
     initialize_model_if_needed()
     start_scheduler()
 

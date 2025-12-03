@@ -3,7 +3,7 @@ import pandas as pd
 
 def fetch_all_recipes() -> pd.DataFrame:
     """Fetch all recipes from CSV file"""
-    df = pd.read_csv("utils/recipes.csv")
+    df = pd.read_csv("https://lvotwwcviiizjbfqxbsn.supabase.co/storage/v1/object/public/friends/recipes.csv")
     if not df.empty:
         # Normalize column names to lowercase for consistency
         df.columns = df.columns.str.lower()

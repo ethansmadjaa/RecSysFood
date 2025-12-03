@@ -51,6 +51,8 @@ export interface Recipe {
   protein_category: string | null
   // Recommendation score
   score: number | null
+  // Recommendation reason (why this recipe was recommended)
+  reason: string | null
 }
 
 export interface RecommendationsResponse {

@@ -2,7 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter }
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { AspectRatio } from '@/components/ui/aspect-ratio'
-import { Heart, Clock, Star, Flame, Drumstick, Leaf, Users } from 'lucide-react'
+import { Heart, Clock, Star, Flame, Drumstick, Leaf, Users, Sparkles } from 'lucide-react'
 import type { Recipe } from '@/lib/api/recommendations'
 import { getRecipeImageUrl, DEFAULT_FOOD_IMAGE } from './recipe-images'
 
@@ -60,7 +60,13 @@ export function RecipeCard({
 
       <CardHeader className="pb-2">
         <CardTitle className="line-clamp-2 text-base">{recipe.name}</CardTitle>
-        {recipe.description && (
+        {recipe.reason && (
+          <p className="flex items-center gap-1.5 text-xs text-purple-600 mt-1">
+            <Sparkles className="h-3 w-3 shrink-0" />
+            <span className="line-clamp-2">{recipe.reason}</span>
+          </p>
+        )}
+        {recipe.description && !recipe.reason && (
           <p className="text-xs text-muted-foreground line-clamp-2 mt-1">
             {recipe.description}
           </p>

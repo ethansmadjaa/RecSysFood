@@ -17,8 +17,7 @@ export function GeneratingState({ message }: GeneratingStateProps) {
           {message || 'Génération des recommandations...'}
         </p>
         <p className="text-sm text-muted-foreground mt-2 text-center max-w-md">
-          On analyse vos préférences pour vous proposer les meilleures recettes. Ça
-          ne prendra que quelques secondes !
+          On analyse vos préférences pour vous proposer les meilleures recettes. Cela peut prendre jusqu'à une minute...
         </p>
       </CardContent>
     </Card>

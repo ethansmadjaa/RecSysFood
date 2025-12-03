@@ -651,6 +651,27 @@ def model_exists() -> bool:
     return all(p.exists() for p in [MODEL_PATH, DATA_PATH, RECIPE_DB_PATH, USER_MAPPING_PATH])
 
 
+def user_exists_in_model(user_id: str) -> bool:
+    """Check if a user exists in the trained model's graph.
+
+    Args:
+        user_id: User UUID string
+
+    Returns:
+        True if user exists in the model, False otherwise
+    """
+    if not model_exists():
+        return False
+
+    try:
+        mappings = torch.load(USER_MAPPING_PATH, weights_only=False)
+        user_dict = mappings["user_dict"]
+        user_node = f"u_{user_id}"
+        return user_node in user_dict
+    except Exception:
+        return False
+
+
 def get_recommendations_for_user(user_id: str, top_k: int = 15) -> list[dict]:
     """Get recommendations for a user using pre-trained model.
 

@@ -225,7 +225,7 @@ export function Recommendations() {
 
   const pollRecsysAfterGrading = async () => {
     let attempts = 0
-    const maxAttempts = 30
+    const maxAttempts = 60 // 60 attempts * 2s = 2 minutes max (model training can take time)
 
     const poll = async () => {
       const done = await fetchRecsysRecommendations()
@@ -305,7 +305,7 @@ export function Recommendations() {
       if (recsysPhase === 'loading') {
         setRecsysPhase('ready')
       }
-    }, 30000)
+    }, 120000) // 2 minutes timeout to allow for model training
 
     return () => {
       mounted = false
@@ -355,7 +355,7 @@ export function Recommendations() {
       await regenerateRecsysRecommendations(userProfileId)
 
       let attempts = 0
-      const maxAttempts = 30
+      const maxAttempts = 60 // 60 attempts * 2s = 2 minutes max (model training can take time)
 
       const pollInterval = setInterval(async () => {
         attempts++
@@ -543,9 +543,31 @@ export function Recommendations() {
                         <Sparkles className="h-8 w-8 text-green-600" />
                       </div>
                       <h3 className="text-lg font-semibold mb-2">Bravo !</h3>
-                      <p className="text-muted-foreground max-w-md">
+                      <p className="text-muted-foreground max-w-md mb-6">
                         Tu as noté toutes les recettes disponibles. Consulte l'onglet "Pour toi" pour voir tes recommandations personnalisées, ou demande plus de recettes à noter.
                       </p>
+                      <div className="flex gap-3">
+                        <Button
+                          onClick={() => setActiveTab('recsys')}
+                          className="gap-2"
+                        >
+                          <Sparkles className="h-4 w-4" />
+                          Voir mes recommandations
+                        </Button>
+                        <Button
+                          variant="outline"
+                          onClick={handleRequestMoreRecipes}
+                          disabled={requestingMore}
+                          className="gap-2"
+                        >
+                          {requestingMore ? (
+                            <RefreshCw className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Plus className="h-4 w-4" />
+                          )}
+                          Continuer à noter
+                        </Button>
+                      </div>
                     </div>
                   )
                 )}

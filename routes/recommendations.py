@@ -6,7 +6,8 @@ import pandas as pd
 import ast
 from utils.filtre_recommandation import UserPreferencesInput, select_recipes_from_preferences
 from utils.recipes_loader import fetch_all_recipes
-from utils.Model_GraphSAGE import get_recommendations_for_user, model_exists
+from utils.Model_GraphSAGE import get_recommendations_for_user, model_exists, user_exists_in_model
+from utils.recsys_scheduler import train_and_save_model
 from models.database import User
 router = APIRouter(prefix="/api/recommendations", tags=["recommendations"])
 
@@ -172,15 +173,22 @@ def update_user_has_recommandations(user_id: str):
 def generate_recsys_recommendations_task(user_id: str):
     """Background task to generate GraphSAGE-based recommendations for a user.
 
-    This uses the pre-trained model for fast inference.
+    This uses the pre-trained model for fast inference. If the user is not found
+    in the model's graph, it will retrain the model first with the latest data.
     """
     try:
         print(f"Generating recsys recommendations for user {user_id}")
 
-        # Check if model exists
-        if not model_exists():
-            print("No trained model available. Skipping recsys generation.")
-            return
+        # Check if model exists and if user is in the model
+        if not model_exists() or not user_exists_in_model(user_id):
+            print(f"User {user_id} not found in model or model doesn't exist. Retraining model...")
+
+            # Retrain the model with latest data (includes this user's interactions)
+            training_success = train_and_save_model()
+
+            if not training_success:
+                print(f"Model training failed for user {user_id}. Cannot generate recommendations.")
+                return
 
         # Get recommendations from GraphSAGE model
         recommendations = get_recommendations_for_user(user_id, top_k=15)

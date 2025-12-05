@@ -843,7 +843,6 @@ def user_exists_in_model(user_id: str) -> bool:
     """Check if we can generate recommendations for a user."""
     return model_exists()
 
-
 def get_recommendations_for_user(
     user_id: str,
     top_k: int = 15,
@@ -866,11 +865,17 @@ def get_recommendations_for_user(
     Returns:
         List of dicts with recipe_id, score, and reason
     """
+    print(f"[DEBUG] Starting get_recommendations_for_user for user_id={user_id}")
+    print(f"[DEBUG] Parameters: top_k={top_k}, k_user={k_user}, k_recipe={k_recipe}")
+    print(f"[DEBUG] liked_recipe_ids: {liked_recipe_ids}")
+    print(f"[DEBUG] user_interaction: {len(user_interaction) if user_interaction else 0}")
     loaded = load_model()
     if loaded is None:
+        print("[DEBUG] Model loading failed, returning empty list")
         return []
 
     model, recipe_embeddings, recipe_id_to_idx, idx_to_recipe_id, data, recipe_db, adapter = loaded
+    print(f"[DEBUG] Model loaded successfully")
 
     # Load sentence transformer for user embedding
     sentence_model = SentenceTransformer("all-MiniLM-L6-v2")
@@ -883,28 +888,40 @@ def get_recommendations_for_user(
             max_total_time=None,
             dietary_restrictions=[]
         )
+        print("[DEBUG] Using default user preferences")
+    else:
+        print(f"[DEBUG] User preferences: {user_prefs}")
 
     user_embed = _create_user_embedding(user_prefs, sentence_model)
+    print(f"[DEBUG] User embedding created with shape: {user_embed.shape}")
 
     # Step 1: Get user-recipe recommendations
     k_user = min(k_user, len(recipe_embeddings))
+    print(f"[DEBUG] Adjusted k_user to {k_user} (total recipes: {len(recipe_embeddings)})")
+    
     user_top_idx, user_top_scores = _calculate_similarity(
         user_embed, recipe_embeddings, adapter=adapter, k=k_user
     )
     user_top_idx = user_top_idx.tolist()
     user_top_scores = [float(s) for s in user_top_scores]
+    print(f"[DEBUG] User-recipe similarity calculated: {len(user_top_idx)} candidates")
 
     # Step 2: If user has liked recipes, rerank based on recipe-recipe similarity
+    print(f"User has {len(liked_recipe_ids) if liked_recipe_ids else 0} liked recipes")
     if liked_recipe_ids and len(liked_recipe_ids) > 0:
+        
         liked_indices = []
         for rid in liked_recipe_ids:
             if rid in recipe_id_to_idx:
                 liked_indices.append(recipe_id_to_idx[rid])
+        
+        print(f"[DEBUG] Found {len(liked_indices)} liked recipes in model index")
 
         if liked_indices:
             # Find the best liked recipe for reranking
             best_liked_idx = None
-            best_mean_score = -float("inf")
+            best_score = -float("inf")
+            print(f"[DEBUG] Finding best liked recipe for reranking...")
 
             for liked_idx in liked_indices:
                 liked_emb = recipe_embeddings[liked_idx]
@@ -913,16 +930,22 @@ def get_recommendations_for_user(
 
                 mean_score = float(scores.mean())
                 std_score = float(scores.std())
+                
+                liked_recipe_id = idx_to_recipe_id[liked_idx]
+                print(f"[DEBUG] Liked recipe {liked_recipe_id}: mean_score={mean_score:.4f}, std_score={std_score:.4f}")
 
                 if user_interaction:
-                    liked_recipe_id = idx_to_recipe_id[liked_idx]
                     rating = next((interaction.rating for interaction in user_interaction if interaction.recipe_id == liked_recipe_id), 1.0)
                     if rating is not None:
                         final_score = (mean_score * rating) * (1 + (1 - std_score))
-                        
+                        print(f"[DEBUG] Recipe {liked_recipe_id} with rating {rating}: final_score={final_score:.4f}")
+
                         if final_score > best_score:
                             best_score = final_score
                             best_liked_idx = liked_idx
+                            print(f"[DEBUG] New best recipe: {liked_recipe_id} with score {best_score:.4f}")
+
+            print(f"[DEBUG] Best liked recipe index: {best_liked_idx}, score: {best_score:.4f}")
 
             if best_liked_idx is not None:
                 # Rerank using best liked recipe
@@ -931,6 +954,7 @@ def get_recommendations_for_user(
                 top_local_idx, top_recipe_scores = _calculate_similarity(
                     liked_emb, candidate_embeds, k=k_recipe
                 )
+                print(f"[DEBUG] Reranking complete: {len(top_local_idx)} candidates")
 
                 recommendations = []
                 for local_idx, recipe_score in zip(top_local_idx.tolist(), top_recipe_scores.tolist()):
@@ -959,6 +983,8 @@ def get_recommendations_for_user(
                         user_score = user_top_scores[local_idx] if local_idx < len(user_top_scores) else 0.0
                         combined_score = 0.5 * user_score + 0.5 * recipe_score
 
+                        print(f"[DEBUG] Recipe {recipe_id}: user_score={user_score:.4f}, recipe_score={recipe_score:.4f}, combined={combined_score:.4f}")
+
                         recommendations.append({
                             "recipe_id": recipe_id,
                             "score": float(combined_score),
@@ -970,10 +996,14 @@ def get_recommendations_for_user(
 
                 # Sort by combined score
                 recommendations.sort(key=lambda x: x["score"], reverse=True)
+                print(f"[DEBUG] Returning {len(recommendations)} liked-based recommendations")
                 return recommendations[:top_k]
+    else:
+        print("No liked recipes provided, returning user-profile based recommendations")
 
     # Fallback: return user-profile based recommendations
     logger.info("fallback recommendations generated")
+    print("[DEBUG] Generating fallback user-profile based recommendations")
     recommendations = []
     seen_ids = set(liked_recipe_ids) if liked_recipe_ids else set()
 
@@ -993,7 +1023,9 @@ def get_recommendations_for_user(
                 "score": float(score),
                 "reason": reason
             })
+            print(f"[DEBUG] Fallback recipe {recipe_id}: score={score:.4f}")
             if len(recommendations) >= top_k:
                 break
 
+    print(f"[DEBUG] Returning {len(recommendations)} fallback recommendations")
     return recommendations

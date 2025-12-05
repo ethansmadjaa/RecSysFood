@@ -146,6 +146,9 @@ def generate_recommendations_task(user_id: str):
         # 5. Clear old recommendations for this user
         supabase.table("user_recommendations").delete().eq("user_id", user_id).eq("type", "filter").execute()
 
+        # clear old interactions for this user
+        supabase.table("interactions").delete().eq("user_id", user_id).execute()
+
         # 6. Insert new recommendations
         for _, recipe in selected_recipes.iterrows():
             recommendation_data: dict[str, Any] = {
@@ -247,7 +250,21 @@ def generate_recsys_recommendations_task(user_id: str):
 
         # Clear old recsys recommendations for this user
         print(f"[DEBUG] Clearing old recsys recommendations for user {user_id}")
-        supabase.table("user_recommendations").delete().eq("user_id", user_id).eq("type", "recsys").execute()
+        response = supabase.table("user_recommendations").delete().eq("user_id", user_id).eq("type", "recsys").execute()
+        print(f"[DEBUG] Cleared {response} old recsys recommendations for user {user_id}")
+
+        # check if the user has no recommendations
+
+        response = (
+            supabase.table("user_recommendations")
+            .select("*")
+            .eq("user_id", user_id)
+            .eq("type", "recsys")
+            .execute()
+        )
+        print(f"[DEBUG] User {user_id} has {response} recsys recommendations")
+        
+
 
         # Insert new recommendations
         print(f"[DEBUG] Inserting {len(recommendations)} new recommendations")

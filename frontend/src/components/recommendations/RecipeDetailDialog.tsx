@@ -72,8 +72,8 @@ export function RecipeDetailDialog({
   const instructions = getInstructions()
 
   return (
-    <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
-      <DialogHeader className="flex flex-row items-start justify-between gap-4">
+    <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col p-0">
+      <DialogHeader className="flex flex-row items-start justify-between gap-4 p-6 pb-0">
         <div className="flex-1">
           <DialogTitle className="text-xl">{recipe.name}</DialogTitle>
           {recipe.authorname && (
@@ -91,8 +91,8 @@ export function RecipeDetailDialog({
         </Button>
       </DialogHeader>
 
-      <ScrollArea className="flex-1 pr-4">
-        <div className="space-y-6">
+      <ScrollArea className="flex-1 min-h-0">
+        <div className="space-y-6 p-6 pt-4">
           {/* Image */}
           <div className="rounded-lg overflow-hidden bg-muted">
             <img

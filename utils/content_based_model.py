@@ -30,6 +30,9 @@ from sentence_transformers import SentenceTransformer
 from torch.utils.data import TensorDataset, DataLoader
 from utils.logger import logger
 
+from models.database import UserPreferences, CalorieGoalEnum, ProteinGoalEnum, Interaction 
+from typing import List
+
 # Device selection: prefer MPS (Apple Silicon), then CUDA, then CPU
 def get_device() -> torch.device:
     """Get the best available device for training."""
@@ -844,10 +847,11 @@ def user_exists_in_model(user_id: str) -> bool:
 def get_recommendations_for_user(
     user_id: str,
     top_k: int = 15,
-    user_prefs: Optional[dict] = None,
+    user_prefs: Optional[UserPreferences] = None,
     liked_recipe_ids: Optional[list[int]] = None,
     k_user: int = 500,
-    k_recipe: int = 100
+    k_recipe: int = 100,
+    user_interaction: Optional[List[Interaction]] = None
 ) -> list[dict]:
     """Get recommendations for a user using the content-based model with reranking.
 
@@ -872,7 +876,13 @@ def get_recommendations_for_user(
     sentence_model = SentenceTransformer("all-MiniLM-L6-v2")
 
     if user_prefs is None:
-        user_prefs = {}
+        user_prefs = UserPreferences(
+            meal_types=[],
+            calorie_goal=CalorieGoalEnum.MEDIUM,
+            protein_goal=ProteinGoalEnum.MEDIUM,
+            max_total_time=None,
+            dietary_restrictions=[]
+        )
 
     user_embed = _create_user_embedding(user_prefs, sentence_model)
 
@@ -902,9 +912,17 @@ def get_recommendations_for_user(
                 _, scores = _calculate_similarity(liked_emb, candidate_embeds, k=k_recipe)
 
                 mean_score = float(scores.mean())
-                if mean_score > best_mean_score:
-                    best_mean_score = mean_score
-                    best_liked_idx = liked_idx
+                std_score = float(scores.std())
+
+                if user_interaction:
+                    liked_recipe_id = idx_to_recipe_id[liked_idx]
+                    rating = next((interaction.rating for interaction in user_interaction if interaction.recipe_id == liked_recipe_id), 1.0)
+                    if rating is not None:
+                        final_score = (mean_score * rating) * (1 + (1 - std_score))
+                        
+                        if final_score > best_score:
+                            best_score = final_score
+                            best_liked_idx = liked_idx
 
             if best_liked_idx is not None:
                 # Rerank using best liked recipe

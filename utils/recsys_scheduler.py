@@ -1,7 +1,9 @@
-"""Scheduler for periodic GraphSAGE model training.
+"""Scheduler for periodic GraphSAGE model training with Link Prediction.
 
 This module handles hourly retraining of the recommendation model
-using the latest data from Supabase.
+using the latest data from Supabase. The model uses:
+- GraphSAGE with link prediction loss for recipe embeddings
+- UserRecipeAdapter for projecting user preferences into recipe space
 """
 
 import threading
@@ -92,20 +94,21 @@ def train_and_save_model():
         else:
             print("training_data fetched and checked successfully")
 
-        # Train model
-        recipe_embeddings, model, recipe_id_to_idx, idx_to_recipe_id, data = Train_GNN(
+        recipe_embeddings, model, recipe_id_to_idx, idx_to_recipe_id, data, adapter = Train_GNN(
             user_preferences_df,
             recipes_df,
             interactions_df,
-            epochs=50
+            epochs=50,
+            adapter_epochs=50,
+            verbose=True
         )
 
         if model is None:
             print("Model training returned None. Skipping save.")
             return False
 
-        # Save model
-        save_model(model, data, recipes_df, recipe_id_to_idx, idx_to_recipe_id)
+        # Save model (now includes adapter)
+        save_model(model, data, recipes_df, recipe_id_to_idx, idx_to_recipe_id, adapter)
 
         print(f"[{datetime.now().isoformat()}] Model training completed successfully")
         return True

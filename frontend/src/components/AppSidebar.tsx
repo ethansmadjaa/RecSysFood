@@ -59,9 +59,9 @@ export function AppSidebar() {
     <Sidebar variant="inset" collapsible="icon" >
       <SidebarHeader>
         <div className="flex items-center gap-2 px-2 py-4">
-          <UtensilsCrossed className="h-6 w-6 text-sidebar-primary" />
+          <img src="/MYF_logo.png" alt="MYF.ai" className="h-6 w-6" />
           {state === "expanded" && (
-            <span className="font-bold text-lg">RecSysFood</span>
+            <span className="font-bold text-lg">MYF.ai</span>
           )}
         </div>
       </SidebarHeader>

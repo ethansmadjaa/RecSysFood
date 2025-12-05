@@ -72,7 +72,7 @@ export function RecipeDetailDialog({
   const instructions = getInstructions()
 
   return (
-    <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col p-0">
+    <DialogContent className="max-w-4xl  overflow-hidden flex flex-col p-0">
       <DialogHeader className="flex flex-row items-start justify-between gap-4 p-6 pb-0">
         <div className="flex-1">
           <DialogTitle className="text-xl">{recipe.name}</DialogTitle>

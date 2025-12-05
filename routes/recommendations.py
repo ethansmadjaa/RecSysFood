@@ -8,7 +8,7 @@ from utils.filtre_recommandation import UserPreferencesInput, select_recipes_fro
 from utils.recipes_loader import fetch_all_recipes
 from utils.content_based_model import get_recommendations_for_user, model_exists
 from utils.recsys_scheduler import train_and_save_model
-from models.database import User
+from models.database import User, Interaction
 router = APIRouter(prefix="/api/recommendations", tags=["recommendations"])
 
 
@@ -179,20 +179,23 @@ def generate_recsys_recommendations_task(user_id: str):
     it will train the model first with the latest data.
     """
     try:
-        print(f"Generating recsys recommendations for user {user_id}")
+        print(f"[DEBUG] Generating recsys recommendations for user {user_id}")
 
         # Check if model exists
         if not model_exists():
-            print(f"Model doesn't exist. Training model...")
+            print(f"[DEBUG] Model doesn't exist. Training model...")
 
             # Train the model with latest data
             training_success = train_and_save_model()
 
             if not training_success:
-                print(f"Model training failed for user {user_id}. Cannot generate recommendations.")
+                print(f"[ERROR] Model training failed for user {user_id}. Cannot generate recommendations.")
                 return
 
+        print(f"[DEBUG] Model exists, proceeding with recommendation generation")
+
         # Fetch user preferences
+        print(f"[DEBUG] Fetching user preferences for user {user_id}")
         prefs_response = (
             supabase.table("user_preferences")
             .select("meal_types, calorie_goal, protein_goal")
@@ -201,41 +204,54 @@ def generate_recsys_recommendations_task(user_id: str):
             .execute()
         )
 
-        user_prefs = {}
-        if prefs_response and prefs_response.data:
-            user_prefs = cast(dict[str, Any], prefs_response.data)
-
-        # Fetch user's liked recipes (rating > 0)
+        print(f"[DEBUG] Fetching user interactions for user {user_id}")
         interactions_response = (
             supabase.table("interactions")
-            .select("recipe_id")
+            .select("*")
             .eq("user_id", user_id)
-            .gt("rating", 0)
             .execute()
         )
 
-        liked_recipe_ids = []
-        if interactions_response and interactions_response.data:
-            interactions_data = cast(list[dict[str, Any]], interactions_response.data)
-            liked_recipe_ids = [i["recipe_id"] for i in interactions_data]
+        interactions_data = cast(list[dict[str, Any]], interactions_response.data or [])
+        user_interactions = [Interaction(**i) for i in interactions_data]
+        print(f"[DEBUG] Found {len(user_interactions)} interactions for user {user_id}")
+
+        user_prefs = {}
+        if prefs_response and prefs_response.data:
+            user_prefs = cast(dict[str, Any], prefs_response.data)
+            print(f"[DEBUG] User preferences: {user_prefs}")
+        else:
+            print(f"[DEBUG] No user preferences found for user {user_id}")
+
+        # Get liked recipe IDs (rating > 0)
+        liked_recipe_ids = [i["recipe_id"] for i in interactions_data]
+        print(f"[DEBUG] Found {len(liked_recipe_ids)} liked recipes for user {user_id}")
 
         # Get recommendations from content-based model
+        print(f"[DEBUG] Calling get_recommendations_for_user with k_user=500, k_recipe=100")
         recommendations = get_recommendations_for_user(
             user_id,
             top_k=15,
             user_prefs=user_prefs,
-            liked_recipe_ids=liked_recipe_ids
+            liked_recipe_ids=liked_recipe_ids,
+            user_interaction=user_interactions,
+            k_user=500,
+            k_recipe=100
         )
 
         if not recommendations:
-            print(f"No recommendations generated for user {user_id}")
+            print(f"[WARNING] No recommendations generated for user {user_id}")
             return
 
+        print(f"[DEBUG] Generated {len(recommendations)} recommendations for user {user_id}")
+
         # Clear old recsys recommendations for this user
+        print(f"[DEBUG] Clearing old recsys recommendations for user {user_id}")
         supabase.table("user_recommendations").delete().eq("user_id", user_id).eq("type", "recsys").execute()
 
         # Insert new recommendations
-        for rec in recommendations:
+        print(f"[DEBUG] Inserting {len(recommendations)} new recommendations")
+        for idx, rec in enumerate(recommendations):
             recommendation_data = {
                 "user_id": user_id,
                 "recipe_id": rec["recipe_id"],
@@ -245,11 +261,14 @@ def generate_recsys_recommendations_task(user_id: str):
                 "reason": rec.get("reason")
             }
             supabase.table("user_recommendations").insert(recommendation_data).execute()
+            print(f"[DEBUG] Inserted recommendation {idx+1}/{len(recommendations)}: recipe_id={rec['recipe_id']}, score={rec['score']:.4f}")
 
-        print(f"Generated {len(recommendations)} recsys recommendations for user {user_id}")
+        print(f"[SUCCESS] Generated {len(recommendations)} recsys recommendations for user {user_id}")
 
     except Exception as e:
-        print(f"Error generating recsys recommendations for user {user_id}: {str(e)}")
+        print(f"[ERROR] Error generating recsys recommendations for user {user_id}: {str(e)}")
+        import traceback
+        print(f"[ERROR] Traceback: {traceback.format_exc()}")
 
 
 @router.post("/{user_id}/generate")
@@ -267,10 +286,7 @@ async def trigger_generate_recommendations(
     )
     if user_response is None or not user_response.data:
         raise HTTPException(status_code=404, detail="User not found")
-    user = User.model_validate(user_response.data)
-    if user.has_recommandations:
-        raise HTTPException(status_code=400, detail="Recommendations already generated")
-
+    
     # Add task to background
     background_tasks.add_task(generate_recommendations_task, user_id)
     background_tasks.add_task(update_user_has_recommandations, user_id)

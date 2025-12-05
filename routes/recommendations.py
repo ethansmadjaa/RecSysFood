@@ -104,7 +104,10 @@ class RecommendationsResponse(BaseModel):
 def generate_recommendations_task(user_id: str):
     """Background task to generate recommendations for a user"""
     try:
+        print(f"[DEBUG] Starting generate_recommendations_task for user {user_id}")
+        
         # 1. Fetch user preferences
+        print(f"[DEBUG] Fetching user preferences for user {user_id}")
         prefs_response = (
             supabase.table("user_preferences")
             .select("*")
@@ -114,10 +117,11 @@ def generate_recommendations_task(user_id: str):
         )
 
         if not prefs_response.data:
-            print(f"No preferences found for user {user_id}")
+            print(f"[DEBUG] No preferences found for user {user_id}")
             return
 
         prefs_data = cast(dict[str, Any], prefs_response.data)
+        print(f"[DEBUG] User preferences fetched: {prefs_data}")
 
         # 2. Create UserPreferencesInput from database data
         prefs = UserPreferencesInput(
@@ -132,25 +136,34 @@ def generate_recommendations_task(user_id: str):
             allergy_fish=prefs_data.get("allergy_fish", False),
             allergy_soy=prefs_data.get("allergy_soy", False),
         )
+        print(f"[DEBUG] UserPreferencesInput created: {prefs}")
 
         # 3. Fetch all recipes
+        print(f"[DEBUG] Fetching all recipes from database")
         recipes_df = fetch_all_recipes()
 
         if recipes_df.empty:
-            print("No recipes found in database")
+            print("[DEBUG] No recipes found in database")
             return
 
+        print(f"[DEBUG] Fetched {len(recipes_df)} recipes from database")
+
         # 4. Generate recommendations
+        print(f"[DEBUG] Generating recommendations using select_recipes_from_preferences")
         selected_recipes = select_recipes_from_preferences(recipes_df, prefs)
+        print(f"[DEBUG] Selected {len(selected_recipes)} recipes")
 
         # 5. Clear old recommendations for this user
+        print(f"[DEBUG] Clearing old filter recommendations for user {user_id}")
         supabase.table("user_recommendations").delete().eq("user_id", user_id).eq("type", "filter").execute()
 
         # clear old interactions for this user
+        print(f"[DEBUG] Clearing old interactions for user {user_id}")
         supabase.table("interactions").delete().eq("user_id", user_id).execute()
 
         # 6. Insert new recommendations
-        for _, recipe in selected_recipes.iterrows():
+        print(f"[DEBUG] Inserting {len(selected_recipes)} new recommendations")
+        for idx, recipe in selected_recipes.iterrows():
             recommendation_data: dict[str, Any] = {
                 "user_id": user_id,
                 "recipe_id": int(recipe["recipeid"]),
@@ -159,17 +172,19 @@ def generate_recommendations_task(user_id: str):
                 "type": "filter"
             }
             supabase.table("user_recommendations").insert(recommendation_data).execute()
-        print(f"Generated {len(selected_recipes)} recommendations for user {user_id}")
+        print(f"[DEBUG] Successfully generated {len(selected_recipes)} recommendations for user {user_id}")
     except Exception as e:
-        print(f"Error generating recommendations for user {user_id}: {str(e)}")
+        print(f"[ERROR] Error generating recommendations for user {user_id}: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error generating recommendations: {str(e)}")
 
 def update_user_has_recommandations(user_id: str):
     """Update user has_recommandations to True"""
+    print(f"[DEBUG] Updating user has_recommandations to True for user {user_id}")
     try:
         supabase.table("users").update({"has_recommandations": True}).eq(
             "id", user_id
         ).execute()
+        print(f"[DEBUG] User has_recommandations updated to True for user {user_id}")
         return {"message": "User has_recommandations updated to True"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error updating user has_recommandations: {str(e)}")

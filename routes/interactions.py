@@ -1,7 +1,7 @@
 from lib import supabase
 from fastapi import APIRouter, HTTPException, BackgroundTasks
 from pydantic import BaseModel
-from typing import List
+from typing import List, Optional
 from uuid import UUID
 from datetime import datetime
 from models.database import Interaction
@@ -39,16 +39,14 @@ async def create_interaction(interaction: InteractionRequest):
         raise HTTPException(status_code=500, detail=f"Error creating interaction: {str(e)}")
 
 
-@router.get("/{user_id}", response_model=List[InteractionResponse])
+@router.get("/{user_id}", response_model=Optional[List[InteractionResponse]])
 async def get_interactions(user_id: str):
     try:
         response = supabase.table("interactions").select("*").eq("user_id", user_id).execute()
         interactions: list[Interaction] = [Interaction.model_validate(interaction) for interaction in response.data]
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error getting interactions: {str(e)}")
-    if not interactions:
-        raise HTTPException(status_code=404, detail="No interactions found")
-    return [InteractionResponse.model_validate(interaction.model_dump()) for interaction in interactions]
+    return [InteractionResponse.model_validate(interaction.model_dump()) for interaction in interactions] if interactions else None
 
 
 @router.patch("/{user_id}/complete-grading")
